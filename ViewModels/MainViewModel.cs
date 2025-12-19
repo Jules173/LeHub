@@ -1,0 +1,503 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Input;
+using LeHub.Models;
+using LeHub.Services;
+using MessageBox = System.Windows.MessageBox;
+using File = System.IO.File;
+
+namespace LeHub.ViewModels;
+
+public class MainViewModel : INotifyPropertyChanged
+{
+    private string _searchText = string.Empty;
+    private bool _showFavoritesOnly;
+    private string _selectedCategory = "";
+    private ObservableCollection<AppCardViewModel> _filteredApps = new();
+    private readonly List<AppCardViewModel> _allApps = new();
+    private ObservableCollection<string> _categories = new();
+    private ObservableCollection<PresetViewModel> _presets = new();
+    private AppCardViewModel? _selectedApp;
+
+    public MainViewModel()
+    {
+        AddAppCommand = new RelayCommand(ExecuteAddApp);
+        ManageTagsCommand = new RelayCommand(ExecuteManageTags);
+        LaunchAppCommand = new RelayCommand(ExecuteLaunchApp);
+        EditAppCommand = new RelayCommand(ExecuteEditApp);
+        DeleteAppCommand = new RelayCommand(ExecuteDeleteApp);
+        ToggleFavoriteCommand = new RelayCommand(ExecuteToggleFavorite);
+        MoveUpCommand = new RelayCommand(ExecuteMoveUp, CanMoveUp);
+        MoveDownCommand = new RelayCommand(ExecuteMoveDown, CanMoveDown);
+        AddPresetCommand = new RelayCommand(ExecuteAddPreset);
+        LaunchPresetCommand = new RelayCommand(ExecuteLaunchPreset);
+        DeletePresetCommand = new RelayCommand(ExecuteDeletePreset);
+
+        LoadApps();
+        LoadPresets();
+        LoadCategories();
+    }
+
+    public ObservableCollection<AppCardViewModel> FilteredApps
+    {
+        get => _filteredApps;
+        private set
+        {
+            _filteredApps = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<string> Categories
+    {
+        get => _categories;
+        private set
+        {
+            _categories = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<PresetViewModel> Presets
+    {
+        get => _presets;
+        private set
+        {
+            _presets = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public List<AppCardViewModel> AllApps => _allApps;
+
+    public AppCardViewModel? SelectedApp
+    {
+        get => _selectedApp;
+        set
+        {
+            if (_selectedApp != value)
+            {
+                _selectedApp = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (_searchText != value)
+            {
+                _searchText = value;
+                OnPropertyChanged();
+                ApplyFilter();
+            }
+        }
+    }
+
+    public bool ShowFavoritesOnly
+    {
+        get => _showFavoritesOnly;
+        set
+        {
+            if (_showFavoritesOnly != value)
+            {
+                _showFavoritesOnly = value;
+                OnPropertyChanged();
+                ApplyFilter();
+            }
+        }
+    }
+
+    public string SelectedCategory
+    {
+        get => _selectedCategory;
+        set
+        {
+            if (_selectedCategory != value)
+            {
+                _selectedCategory = value;
+                OnPropertyChanged();
+                ApplyFilter();
+            }
+        }
+    }
+
+    public ICommand AddAppCommand { get; }
+    public ICommand ManageTagsCommand { get; }
+    public ICommand LaunchAppCommand { get; }
+    public ICommand EditAppCommand { get; }
+    public ICommand DeleteAppCommand { get; }
+    public ICommand ToggleFavoriteCommand { get; }
+    public ICommand MoveUpCommand { get; }
+    public ICommand MoveDownCommand { get; }
+    public ICommand AddPresetCommand { get; }
+    public ICommand LaunchPresetCommand { get; }
+    public ICommand DeletePresetCommand { get; }
+
+    public event Action? RequestAddApp;
+    public event Action<AppCardViewModel>? RequestEditApp;
+    public event Action<string, string>? RequestAddAppWithData;
+    public event Action? RequestAddPreset;
+
+    public void LoadApps()
+    {
+        _allApps.Clear();
+        var apps = DatabaseService.Instance.GetAllApps();
+
+        foreach (var app in apps)
+        {
+            _allApps.Add(new AppCardViewModel(app));
+        }
+
+        ApplyFilter();
+    }
+
+    public void LoadPresets()
+    {
+        var presets = DatabaseService.Instance.GetAllPresets();
+        Presets = new ObservableCollection<PresetViewModel>(
+            presets.Select(p => new PresetViewModel(p)));
+    }
+
+    public void LoadCategories()
+    {
+        var cats = DatabaseService.Instance.GetAllCategories();
+        cats.Insert(0, ""); // "All" option
+        Categories = new ObservableCollection<string>(cats);
+    }
+
+    private void ApplyFilter()
+    {
+        var filtered = _allApps.AsEnumerable();
+
+        if (_showFavoritesOnly)
+        {
+            filtered = filtered.Where(a => a.IsFavorite);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedCategory))
+        {
+            filtered = filtered.Where(a =>
+                a.Category.Equals(_selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var search = _searchText.ToLowerInvariant();
+            filtered = filtered.Where(a =>
+                a.Name.ToLowerInvariant().Contains(search) ||
+                a.Category.ToLowerInvariant().Contains(search) ||
+                a.Tags.Any(t => t.Name.ToLowerInvariant().Contains(search)));
+        }
+
+        FilteredApps = new ObservableCollection<AppCardViewModel>(
+            filtered.OrderBy(a => a.SortOrder).ThenBy(a => a.Name));
+    }
+
+    private void ExecuteAddApp(object? _)
+    {
+        RequestAddApp?.Invoke();
+    }
+
+    private void ExecuteManageTags(object? _)
+    {
+        MessageBox.Show("La gestion des tags sera disponible dans une future version.",
+            "Fonctionnalite a venir", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    public void ExecuteLaunchApp(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app)
+            return;
+
+        LaunchApplication(app);
+    }
+
+    public void LaunchApplication(AppCardViewModel app)
+    {
+        if (string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            MessageBox.Show($"Le chemin de l'application '{app.Name}' n'est pas defini.",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (app.IsExeMissing)
+        {
+            MessageBox.Show($"L'application '{app.Name}' n'a pas ete trouvee :\n{app.ExePath}",
+                "Fichier introuvable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = app.ExePath,
+                Arguments = app.Arguments ?? "",
+                UseShellExecute = true
+            };
+            Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Impossible de lancer '{app.Name}' :\n{ex.Message}",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExecuteEditApp(object? parameter)
+    {
+        if (parameter is AppCardViewModel app)
+        {
+            RequestEditApp?.Invoke(app);
+        }
+    }
+
+    public void ExecuteDeleteApp(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app)
+            return;
+
+        DeleteAppWithConfirmation(app);
+    }
+
+    public void DeleteAppWithConfirmation(AppCardViewModel app)
+    {
+        var result = MessageBox.Show(
+            $"Voulez-vous vraiment supprimer '{app.Name}' de LeHub ?",
+            "Confirmer la suppression",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            DatabaseService.Instance.DeleteApp(app.Id);
+            _allApps.Remove(app);
+            ApplyFilter();
+            LoadCategories();
+        }
+    }
+
+    private void ExecuteToggleFavorite(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app)
+            return;
+
+        app.IsFavorite = !app.IsFavorite;
+        DatabaseService.Instance.UpdateFavorite(app.Id, app.IsFavorite);
+
+        if (_showFavoritesOnly)
+        {
+            ApplyFilter();
+        }
+    }
+
+    private bool CanMoveUp(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return false;
+        var index = _allApps.IndexOf(app);
+        return index > 0;
+    }
+
+    private void ExecuteMoveUp(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return;
+        var index = _allApps.IndexOf(app);
+        if (index <= 0) return;
+
+        var other = _allApps[index - 1];
+        (app.SortOrder, other.SortOrder) = (other.SortOrder, app.SortOrder);
+
+        DatabaseService.Instance.UpdateSortOrder(app.Id, app.SortOrder);
+        DatabaseService.Instance.UpdateSortOrder(other.Id, other.SortOrder);
+
+        _allApps[index] = other;
+        _allApps[index - 1] = app;
+
+        ApplyFilter();
+    }
+
+    private bool CanMoveDown(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return false;
+        var index = _allApps.IndexOf(app);
+        return index >= 0 && index < _allApps.Count - 1;
+    }
+
+    private void ExecuteMoveDown(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return;
+        var index = _allApps.IndexOf(app);
+        if (index < 0 || index >= _allApps.Count - 1) return;
+
+        var other = _allApps[index + 1];
+        (app.SortOrder, other.SortOrder) = (other.SortOrder, app.SortOrder);
+
+        DatabaseService.Instance.UpdateSortOrder(app.Id, app.SortOrder);
+        DatabaseService.Instance.UpdateSortOrder(other.Id, other.SortOrder);
+
+        _allApps[index] = other;
+        _allApps[index + 1] = app;
+
+        ApplyFilter();
+    }
+
+    private void ExecuteAddPreset(object? _)
+    {
+        RequestAddPreset?.Invoke();
+    }
+
+    private async void ExecuteLaunchPreset(object? parameter)
+    {
+        if (parameter is not PresetViewModel preset) return;
+
+        foreach (var presetApp in preset.Apps)
+        {
+            if (presetApp.App == null) continue;
+
+            var appVm = _allApps.FirstOrDefault(a => a.Id == presetApp.AppId);
+            if (appVm != null && appVm.CanLaunch)
+            {
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = appVm.ExePath,
+                        Arguments = appVm.Arguments ?? "",
+                        UseShellExecute = true
+                    };
+                    Process.Start(startInfo);
+
+                    if (preset.DelayMs > 0)
+                    {
+                        await Task.Delay(preset.DelayMs);
+                    }
+                }
+                catch
+                {
+                    // Continue with next app
+                }
+            }
+        }
+    }
+
+    private void ExecuteDeletePreset(object? parameter)
+    {
+        if (parameter is not PresetViewModel preset) return;
+
+        var result = MessageBox.Show(
+            $"Voulez-vous vraiment supprimer le preset '{preset.Name}' ?",
+            "Confirmer la suppression",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            DatabaseService.Instance.DeletePreset(preset.Id);
+            Presets.Remove(preset);
+        }
+    }
+
+    public void AddNewApp(AppEntry newApp)
+    {
+        var id = DatabaseService.Instance.AddApp(newApp);
+        newApp.Id = id;
+        newApp.SortOrder = _allApps.Count;
+        _allApps.Add(new AppCardViewModel(newApp));
+        ApplyFilter();
+        LoadCategories();
+    }
+
+    public void UpdateExistingApp(AppCardViewModel cardVm, AppEntry updatedData)
+    {
+        var model = cardVm.GetModel();
+        model.Name = updatedData.Name;
+        model.ExePath = updatedData.ExePath;
+        model.Arguments = updatedData.Arguments;
+        model.Category = updatedData.Category;
+        model.Tags = updatedData.Tags;
+
+        DatabaseService.Instance.UpdateApp(model);
+
+        cardVm.UpdateFromData(updatedData);
+        ApplyFilter();
+        LoadCategories();
+    }
+
+    public void HandleFileDrop(string[] files)
+    {
+        foreach (var file in files)
+        {
+            var ext = System.IO.Path.GetExtension(file).ToLowerInvariant();
+
+            if (ext == ".exe")
+            {
+                var name = System.IO.Path.GetFileNameWithoutExtension(file);
+                RequestAddAppWithData?.Invoke(name, file);
+                return;
+            }
+            else if (ext == ".lnk")
+            {
+                var info = ShortcutResolverService.Instance.ResolveShortcut(file);
+                if (info != null)
+                {
+                    var name = ShortcutResolverService.Instance.GetAppNameFromPath(file);
+                    RequestAddAppWithData?.Invoke(name, info.TargetPath);
+                    return;
+                }
+                else
+                {
+                    MessageBox.Show("Impossible de lire ce raccourci.",
+                        "Format non supporte", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            else
+            {
+                MessageBox.Show("Seuls les fichiers .exe et .lnk sont supportes.",
+                    "Format non supporte", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+
+    public void AddPreset(Preset preset)
+    {
+        var id = DatabaseService.Instance.AddPreset(preset);
+        preset.Id = id;
+        Presets.Add(new PresetViewModel(preset));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public class PresetViewModel : INotifyPropertyChanged
+{
+    private readonly Preset _preset;
+
+    public PresetViewModel(Preset preset)
+    {
+        _preset = preset;
+    }
+
+    public int Id => _preset.Id;
+    public string Name => _preset.Name;
+    public int DelayMs => _preset.DelayMs;
+    public List<PresetApp> Apps => _preset.Apps;
+
+    public string AppsDisplay => Apps.Count > 0
+        ? string.Join(", ", Apps.Select(a => a.App?.Name ?? "?"))
+        : "Aucune app";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}

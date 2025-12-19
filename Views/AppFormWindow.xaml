@@ -1,0 +1,108 @@
+<Window x:Class="LeHub.Views.AppFormWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ajouter une application"
+        Width="500"
+        Height="440"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundDarkBrush}">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0"
+                   x:Name="FormTitle"
+                   Text="Ajouter une application"
+                   Style="{StaticResource TitleText}"
+                   Margin="0,0,0,20"/>
+
+        <!-- Name -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,12">
+            <TextBlock Text="Nom"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,0,0,6"/>
+            <TextBox x:Name="NameTextBox"
+                     Style="{StaticResource SearchTextBox}"
+                     Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <!-- Path -->
+        <StackPanel Grid.Row="2" Margin="0,0,0,12">
+            <TextBlock Text="Chemin de l'executable"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,0,0,6"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="PathTextBox"
+                         Grid.Column="0"
+                         Style="{StaticResource SearchTextBox}"
+                         Text="{Binding ExePath, UpdateSourceTrigger=PropertyChanged}"/>
+                <Button Grid.Column="1"
+                        Content="Parcourir..."
+                        Style="{StaticResource ButtonBase}"
+                        Margin="8,0,0,0"
+                        Click="BrowseButton_Click"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Arguments -->
+        <StackPanel Grid.Row="3" Margin="0,0,0,12">
+            <TextBlock Text="Arguments (optionnel)"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,0,0,6"/>
+            <TextBox x:Name="ArgsTextBox"
+                     Style="{StaticResource SearchTextBox}"
+                     Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <!-- Category -->
+        <StackPanel Grid.Row="4" Margin="0,0,0,12">
+            <TextBlock Text="Categorie (optionnel)"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,0,0,6"/>
+            <TextBox x:Name="CategoryTextBox"
+                     Style="{StaticResource SearchTextBox}"
+                     Text="{Binding Category, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <!-- Tags -->
+        <StackPanel Grid.Row="5" Margin="0,0,0,12">
+            <TextBlock Text="Tags (separes par des virgules)"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,0,0,6"/>
+            <TextBox x:Name="TagsTextBox"
+                     Style="{StaticResource SearchTextBox}"
+                     Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="6"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button Content="Annuler"
+                    Style="{StaticResource ButtonBase}"
+                    Width="100"
+                    Margin="0,0,12,0"
+                    Click="CancelButton_Click"/>
+            <Button x:Name="SaveButton"
+                    Content="Enregistrer"
+                    Style="{StaticResource PrimaryButton}"
+                    Width="120"
+                    Click="SaveButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
