@@ -7,9 +7,13 @@ public class AppEntry
     public string ExePath { get; set; } = string.Empty;
     public string? Arguments { get; set; }
     public bool IsFavorite { get; set; }
-    public string Category { get; set; } = string.Empty;
+    public int? CategoryId { get; set; }
+    public Category? Category { get; set; }
     public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<Tag> Tags { get; set; } = new();
+
+    // Helper property for display
+    public string CategoryName => Category?.Name ?? "";
 }

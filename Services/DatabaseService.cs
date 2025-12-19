@@ -34,14 +34,23 @@ public class DatabaseService
         // Create base tables
         var createTablesCmd = connection.CreateCommand();
         createTablesCmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                color TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS apps (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 exe_path TEXT NOT NULL,
                 args TEXT,
                 is_favorite INTEGER DEFAULT 0,
+                category_id INTEGER,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS tags (
@@ -99,12 +108,57 @@ public class DatabaseService
             cmd.ExecuteNonQuery();
         }
 
-        // Check and add category column
-        if (!ColumnExists(connection, "apps", "category"))
+        // Check and add category_id column (new FK-based system)
+        if (!ColumnExists(connection, "apps", "category_id"))
         {
             var cmd = connection.CreateCommand();
-            cmd.CommandText = "ALTER TABLE apps ADD COLUMN category TEXT DEFAULT ''";
+            cmd.CommandText = "ALTER TABLE apps ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL";
             cmd.ExecuteNonQuery();
+        }
+
+        // Migrate old string-based category to new FK system
+        if (ColumnExists(connection, "apps", "category"))
+        {
+            MigrateCategoriesFromString(connection);
+        }
+    }
+
+    private void MigrateCategoriesFromString(SqliteConnection connection)
+    {
+        // Get all distinct non-empty categories from the old string column
+        var getCategoriesCmd = connection.CreateCommand();
+        getCategoriesCmd.CommandText = "SELECT DISTINCT category FROM apps WHERE category IS NOT NULL AND category != ''";
+
+        var categoriesToMigrate = new List<string>();
+        using (var reader = getCategoriesCmd.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                categoriesToMigrate.Add(reader.GetString(0));
+            }
+        }
+
+        // Create categories and update apps
+        foreach (var categoryName in categoriesToMigrate)
+        {
+            // Create category if not exists
+            var insertCmd = connection.CreateCommand();
+            insertCmd.CommandText = "INSERT OR IGNORE INTO categories (name) VALUES (@name)";
+            insertCmd.Parameters.AddWithValue("@name", categoryName);
+            insertCmd.ExecuteNonQuery();
+
+            // Get the category ID
+            var getIdCmd = connection.CreateCommand();
+            getIdCmd.CommandText = "SELECT id FROM categories WHERE name = @name";
+            getIdCmd.Parameters.AddWithValue("@name", categoryName);
+            var categoryId = Convert.ToInt32(getIdCmd.ExecuteScalar());
+
+            // Update apps with this category string to use the FK
+            var updateCmd = connection.CreateCommand();
+            updateCmd.CommandText = "UPDATE apps SET category_id = @catId WHERE category = @catName AND category_id IS NULL";
+            updateCmd.Parameters.AddWithValue("@catId", categoryId);
+            updateCmd.Parameters.AddWithValue("@catName", categoryName);
+            updateCmd.ExecuteNonQuery();
         }
     }
 
@@ -133,15 +187,24 @@ public class DatabaseService
 
         var spotifyPath = spotifyPaths.FirstOrDefault(File.Exists) ?? "";
 
+        // Create Music category first
+        var catCmd = connection.CreateCommand();
+        catCmd.CommandText = "INSERT OR IGNORE INTO categories (name) VALUES ('Music')";
+        catCmd.ExecuteNonQuery();
+
+        var catIdCmd = connection.CreateCommand();
+        catIdCmd.CommandText = "SELECT id FROM categories WHERE name = 'Music'";
+        var categoryId = Convert.ToInt32(catIdCmd.ExecuteScalar());
+
         var insertCmd = connection.CreateCommand();
         insertCmd.CommandText = @"
-            INSERT INTO apps (name, exe_path, args, is_favorite, category, sort_order)
-            VALUES (@name, @path, @args, @fav, @cat, @sort)";
+            INSERT INTO apps (name, exe_path, args, is_favorite, category_id, sort_order)
+            VALUES (@name, @path, @args, @fav, @catId, @sort)";
         insertCmd.Parameters.AddWithValue("@name", "Spotify");
         insertCmd.Parameters.AddWithValue("@path", spotifyPath);
         insertCmd.Parameters.AddWithValue("@args", "");
         insertCmd.Parameters.AddWithValue("@fav", 1);
-        insertCmd.Parameters.AddWithValue("@cat", "Music");
+        insertCmd.Parameters.AddWithValue("@catId", categoryId);
         insertCmd.Parameters.AddWithValue("@sort", 0);
         insertCmd.ExecuteNonQuery();
 
@@ -170,9 +233,11 @@ public class DatabaseService
 
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT id, name, exe_path, args, is_favorite, category, sort_order, created_at, updated_at
-            FROM apps
-            ORDER BY sort_order, name";
+            SELECT a.id, a.name, a.exe_path, a.args, a.is_favorite, a.category_id, a.sort_order,
+                   a.created_at, a.updated_at, c.id as cat_id, c.name as cat_name, c.color as cat_color
+            FROM apps a
+            LEFT JOIN categories c ON a.category_id = c.id
+            ORDER BY a.sort_order, a.name";
 
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -184,11 +249,22 @@ public class DatabaseService
                 ExePath = reader.GetString(2),
                 Arguments = reader.IsDBNull(3) ? null : reader.GetString(3),
                 IsFavorite = reader.GetInt32(4) == 1,
-                Category = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                CategoryId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 SortOrder = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
                 CreatedAt = DateTime.Parse(reader.GetString(7)),
                 UpdatedAt = DateTime.Parse(reader.GetString(8))
             };
+
+            // Load category if exists
+            if (!reader.IsDBNull(9))
+            {
+                app.Category = new Category
+                {
+                    Id = reader.GetInt32(9),
+                    Name = reader.GetString(10),
+                    Color = reader.IsDBNull(11) ? null : reader.GetString(11)
+                };
+            }
 
             app.Tags = GetTagsForApp(connection, app.Id);
             apps.Add(app);
@@ -245,20 +321,26 @@ public class DatabaseService
         return tags;
     }
 
-    public List<string> GetAllCategories()
+    public List<Category> GetAllCategories()
     {
-        var categories = new List<string>();
+        var categories = new List<Category>();
 
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
         var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT DISTINCT category FROM apps WHERE category != '' ORDER BY category";
+        cmd.CommandText = "SELECT id, name, color, created_at FROM categories ORDER BY name";
 
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            categories.Add(reader.GetString(0));
+            categories.Add(new Category
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Color = reader.IsDBNull(2) ? null : reader.GetString(2),
+                CreatedAt = DateTime.Parse(reader.GetString(3))
+            });
         }
 
         return categories;
@@ -276,14 +358,14 @@ public class DatabaseService
 
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO apps (name, exe_path, args, is_favorite, category, sort_order)
-            VALUES (@name, @path, @args, @fav, @cat, @sort);
+            INSERT INTO apps (name, exe_path, args, is_favorite, category_id, sort_order)
+            VALUES (@name, @path, @args, @fav, @catId, @sort);
             SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("@name", app.Name);
         cmd.Parameters.AddWithValue("@path", app.ExePath);
         cmd.Parameters.AddWithValue("@args", app.Arguments ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@fav", app.IsFavorite ? 1 : 0);
-        cmd.Parameters.AddWithValue("@cat", app.Category ?? "");
+        cmd.Parameters.AddWithValue("@catId", app.CategoryId.HasValue ? app.CategoryId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@sort", nextOrder);
 
         var appId = Convert.ToInt32(cmd.ExecuteScalar());
@@ -306,13 +388,13 @@ public class DatabaseService
         cmd.CommandText = @"
             UPDATE apps
             SET name = @name, exe_path = @path, args = @args, is_favorite = @fav,
-                category = @cat, sort_order = @sort, updated_at = CURRENT_TIMESTAMP
+                category_id = @catId, sort_order = @sort, updated_at = CURRENT_TIMESTAMP
             WHERE id = @id";
         cmd.Parameters.AddWithValue("@name", app.Name);
         cmd.Parameters.AddWithValue("@path", app.ExePath);
         cmd.Parameters.AddWithValue("@args", app.Arguments ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@fav", app.IsFavorite ? 1 : 0);
-        cmd.Parameters.AddWithValue("@cat", app.Category ?? "");
+        cmd.Parameters.AddWithValue("@catId", app.CategoryId.HasValue ? app.CategoryId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@sort", app.SortOrder);
         cmd.Parameters.AddWithValue("@id", app.Id);
         cmd.ExecuteNonQuery();
@@ -413,9 +495,11 @@ public class DatabaseService
 
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT pa.app_id, pa.order_index, a.id, a.name, a.exe_path, a.args, a.is_favorite, a.category, a.sort_order
+            SELECT pa.app_id, pa.order_index, a.id, a.name, a.exe_path, a.args, a.is_favorite,
+                   a.category_id, a.sort_order, c.id as cat_id, c.name as cat_name, c.color as cat_color
             FROM preset_apps pa
             INNER JOIN apps a ON pa.app_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
             WHERE pa.preset_id = @presetId
             ORDER BY pa.order_index";
         cmd.Parameters.AddWithValue("@presetId", presetId);
@@ -423,21 +507,34 @@ public class DatabaseService
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            var app = new AppEntry
+            {
+                Id = reader.GetInt32(2),
+                Name = reader.GetString(3),
+                ExePath = reader.GetString(4),
+                Arguments = reader.IsDBNull(5) ? null : reader.GetString(5),
+                IsFavorite = reader.GetInt32(6) == 1,
+                CategoryId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                SortOrder = reader.IsDBNull(8) ? 0 : reader.GetInt32(8)
+            };
+
+            // Load category if exists
+            if (!reader.IsDBNull(9))
+            {
+                app.Category = new Category
+                {
+                    Id = reader.GetInt32(9),
+                    Name = reader.GetString(10),
+                    Color = reader.IsDBNull(11) ? null : reader.GetString(11)
+                };
+            }
+
             apps.Add(new PresetApp
             {
                 PresetId = presetId,
                 AppId = reader.GetInt32(0),
                 OrderIndex = reader.GetInt32(1),
-                App = new AppEntry
-                {
-                    Id = reader.GetInt32(2),
-                    Name = reader.GetString(3),
-                    ExePath = reader.GetString(4),
-                    Arguments = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    IsFavorite = reader.GetInt32(6) == 1,
-                    Category = reader.IsDBNull(7) ? "" : reader.GetString(7),
-                    SortOrder = reader.IsDBNull(8) ? 0 : reader.GetInt32(8)
-                }
+                App = app
             });
         }
 
@@ -513,6 +610,51 @@ public class DatabaseService
         var cmd = connection.CreateCommand();
         cmd.CommandText = "DELETE FROM presets WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", presetId);
+        cmd.ExecuteNonQuery();
+    }
+
+    // Category CRUD methods
+    public int AddCategory(string name, string? color = null)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO categories (name, color) VALUES (@name, @color); SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("@name", name);
+        cmd.Parameters.AddWithValue("@color", color ?? (object)DBNull.Value);
+
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public int GetOrCreateCategory(string name)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var findCmd = connection.CreateCommand();
+        findCmd.CommandText = "SELECT id FROM categories WHERE name = @name";
+        findCmd.Parameters.AddWithValue("@name", name);
+        var result = findCmd.ExecuteScalar();
+
+        if (result != null)
+            return Convert.ToInt32(result);
+
+        var insertCmd = connection.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO categories (name) VALUES (@name); SELECT last_insert_rowid();";
+        insertCmd.Parameters.AddWithValue("@name", name);
+        return Convert.ToInt32(insertCmd.ExecuteScalar());
+    }
+
+    public void DeleteCategory(int categoryId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        // Apps will have category_id set to NULL due to ON DELETE SET NULL
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM categories WHERE id = @id";
+        cmd.Parameters.AddWithValue("@id", categoryId);
         cmd.ExecuteNonQuery();
     }
 

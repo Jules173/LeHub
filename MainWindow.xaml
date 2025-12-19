@@ -167,33 +167,18 @@
                         <ComboBox x:Name="CategoryCombo"
                                   ItemsSource="{Binding Categories}"
                                   SelectedItem="{Binding SelectedCategory}"
+                                  DisplayMemberPath="Name"
                                   Width="120"
                                   Background="{StaticResource BackgroundMediumBrush}"
-                                  Foreground="{StaticResource TextPrimaryBrush}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock>
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="{Binding}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding}" Value="">
-                                                        <Setter Property="Text" Value="Toutes"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  Foreground="{StaticResource TextPrimaryBrush}"/>
                     </StackPanel>
 
                     <!-- Search Box -->
-                    <Grid Grid.Column="1" MaxWidth="350" HorizontalAlignment="Left">
+                    <Grid Grid.Column="1" Width="300" HorizontalAlignment="Left">
                         <TextBox x:Name="SearchBox"
                                  Style="{StaticResource SearchTextBox}"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 MinWidth="300"/>
                         <TextBlock Text="Rechercher... (Ctrl+F)"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center"
@@ -249,6 +234,7 @@
                             <Border Style="{StaticResource AppCard}"
                                     Width="240"
                                     MouseLeftButtonDown="Card_MouseLeftButtonDown"
+                                    MouseRightButtonUp="Card_MouseRightButtonUp"
                                     Tag="{Binding}">
                                 <Grid>
                                     <Grid.RowDefinitions>
@@ -319,11 +305,11 @@
 
                                     <!-- Category -->
                                     <TextBlock Grid.Row="2"
-                                               Text="{Binding Category}"
+                                               Text="{Binding CategoryName}"
                                                Foreground="{StaticResource AccentBlueBrush}"
                                                FontSize="10"
                                                Margin="0,0,0,4"
-                                               Visibility="{Binding Category, Converter={StaticResource StringNotEmptyToVisibility}}"/>
+                                               Visibility="{Binding CategoryName, Converter={StaticResource StringNotEmptyToVisibility}}"/>
 
                                     <!-- Tags -->
                                     <ItemsControl Grid.Row="3"
@@ -347,30 +333,33 @@
                                     </ItemsControl>
 
                                     <!-- Action Buttons -->
-                                    <StackPanel Grid.Row="4"
-                                                Orientation="Horizontal"
-                                                HorizontalAlignment="Stretch">
-                                        <Button Content="Lancer"
+                                    <Grid Grid.Row="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button Grid.Column="0"
+                                                Content="Lancer"
                                                 Style="{StaticResource PrimaryButton}"
                                                 Padding="10,5"
                                                 FontSize="11"
                                                 IsEnabled="{Binding CanLaunch}"
                                                 Command="{Binding DataContext.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"/>
-                                        <Button Content="Modifier"
+
+                                        <Button Grid.Column="2"
+                                                Content="⋯"
                                                 Style="{StaticResource SmallButton}"
-                                                Margin="6,0,0,0"
-                                                Command="{Binding DataContext.EditAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"/>
-                                        <Button Content="x"
-                                                Style="{StaticResource DangerButton}"
-                                                Margin="6,0,0,0"
-                                                FontSize="14"
-                                                MinWidth="30"
-                                                ToolTip="Supprimer"
-                                                Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"/>
-                                    </StackPanel>
+                                                FontSize="16"
+                                                FontWeight="Bold"
+                                                MinWidth="36"
+                                                Padding="8,2"
+                                                ToolTip="Plus d'options"
+                                                Click="MenuButton_Click"
+                                                Tag="{Binding}"/>
+                                    </Grid>
                                 </Grid>
                             </Border>
                         </DataTemplate>

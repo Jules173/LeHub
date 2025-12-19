@@ -15,10 +15,10 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private string _searchText = string.Empty;
     private bool _showFavoritesOnly;
-    private string _selectedCategory = "";
+    private Category? _selectedCategory;
     private ObservableCollection<AppCardViewModel> _filteredApps = new();
     private readonly List<AppCardViewModel> _allApps = new();
-    private ObservableCollection<string> _categories = new();
+    private ObservableCollection<Category> _categories = new();
     private ObservableCollection<PresetViewModel> _presets = new();
     private AppCardViewModel? _selectedApp;
 
@@ -35,6 +35,9 @@ public class MainViewModel : INotifyPropertyChanged
         AddPresetCommand = new RelayCommand(ExecuteAddPreset);
         LaunchPresetCommand = new RelayCommand(ExecuteLaunchPreset);
         DeletePresetCommand = new RelayCommand(ExecuteDeletePreset);
+        OpenLocationCommand = new RelayCommand(ExecuteOpenLocation);
+        CopyPathCommand = new RelayCommand(ExecuteCopyPath);
+        LaunchAsAdminCommand = new RelayCommand(ExecuteLaunchAsAdmin);
 
         LoadApps();
         LoadPresets();
@@ -51,7 +54,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public ObservableCollection<string> Categories
+    public ObservableCollection<Category> Categories
     {
         get => _categories;
         private set
@@ -114,7 +117,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public string SelectedCategory
+    public Category? SelectedCategory
     {
         get => _selectedCategory;
         set
@@ -139,6 +142,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand AddPresetCommand { get; }
     public ICommand LaunchPresetCommand { get; }
     public ICommand DeletePresetCommand { get; }
+    public ICommand OpenLocationCommand { get; }
+    public ICommand CopyPathCommand { get; }
+    public ICommand LaunchAsAdminCommand { get; }
 
     public event Action? RequestAddApp;
     public event Action<AppCardViewModel>? RequestEditApp;
@@ -168,8 +174,10 @@ public class MainViewModel : INotifyPropertyChanged
     public void LoadCategories()
     {
         var cats = DatabaseService.Instance.GetAllCategories();
-        cats.Insert(0, ""); // "All" option
-        Categories = new ObservableCollection<string>(cats);
+        // Insert a "null" category at the beginning for "All"
+        var categoriesWithAll = new List<Category> { new Category { Id = 0, Name = "Toutes" } };
+        categoriesWithAll.AddRange(cats);
+        Categories = new ObservableCollection<Category>(categoriesWithAll);
     }
 
     private void ApplyFilter()
@@ -181,10 +189,10 @@ public class MainViewModel : INotifyPropertyChanged
             filtered = filtered.Where(a => a.IsFavorite);
         }
 
-        if (!string.IsNullOrWhiteSpace(_selectedCategory))
+        // Filter by category (Id = 0 means "All")
+        if (_selectedCategory != null && _selectedCategory.Id != 0)
         {
-            filtered = filtered.Where(a =>
-                a.Category.Equals(_selectedCategory, StringComparison.OrdinalIgnoreCase));
+            filtered = filtered.Where(a => a.CategoryId == _selectedCategory.Id);
         }
 
         if (!string.IsNullOrWhiteSpace(_searchText))
@@ -192,7 +200,7 @@ public class MainViewModel : INotifyPropertyChanged
             var search = _searchText.ToLowerInvariant();
             filtered = filtered.Where(a =>
                 a.Name.ToLowerInvariant().Contains(search) ||
-                a.Category.ToLowerInvariant().Contains(search) ||
+                a.CategoryName.ToLowerInvariant().Contains(search) ||
                 a.Tags.Any(t => t.Name.ToLowerInvariant().Contains(search)));
         }
 
@@ -405,6 +413,94 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private void ExecuteOpenLocation(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return;
+
+        if (string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            MessageBox.Show("Le chemin de l'application n'est pas defini.",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var directory = System.IO.Path.GetDirectoryName(app.ExePath);
+        if (string.IsNullOrEmpty(directory) || !System.IO.Directory.Exists(directory))
+        {
+            MessageBox.Show($"Le dossier n'existe pas :\n{directory}",
+                "Dossier introuvable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            // Open explorer and select the file
+            Process.Start("explorer.exe", $"/select,\"{app.ExePath}\"");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Impossible d'ouvrir l'emplacement :\n{ex.Message}",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExecuteCopyPath(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return;
+
+        if (!string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(app.ExePath);
+            }
+            catch
+            {
+                // Clipboard access can fail sometimes
+            }
+        }
+    }
+
+    private void ExecuteLaunchAsAdmin(object? parameter)
+    {
+        if (parameter is not AppCardViewModel app) return;
+
+        if (string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            MessageBox.Show($"Le chemin de l'application '{app.Name}' n'est pas defini.",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (app.IsExeMissing)
+        {
+            MessageBox.Show($"L'application '{app.Name}' n'a pas ete trouvee :\n{app.ExePath}",
+                "Fichier introuvable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = app.ExePath,
+                Arguments = app.Arguments ?? "",
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            // User cancelled UAC or other error
+            if (!ex.Message.Contains("annul"))
+            {
+                MessageBox.Show($"Impossible de lancer '{app.Name}' en admin :\n{ex.Message}",
+                    "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
     public void AddNewApp(AppEntry newApp)
     {
         var id = DatabaseService.Instance.AddApp(newApp);
@@ -418,15 +514,28 @@ public class MainViewModel : INotifyPropertyChanged
     public void UpdateExistingApp(AppCardViewModel cardVm, AppEntry updatedData)
     {
         var model = cardVm.GetModel();
+
+        // Preserve the original Id
+        updatedData.Id = model.Id;
+        updatedData.SortOrder = model.SortOrder;
+        updatedData.IsFavorite = model.IsFavorite;
+        updatedData.CreatedAt = model.CreatedAt;
+        updatedData.UpdatedAt = DateTime.Now;
+
+        // Update the model
         model.Name = updatedData.Name;
         model.ExePath = updatedData.ExePath;
         model.Arguments = updatedData.Arguments;
+        model.CategoryId = updatedData.CategoryId;
         model.Category = updatedData.Category;
         model.Tags = updatedData.Tags;
 
+        // Save to database
         DatabaseService.Instance.UpdateApp(model);
 
-        cardVm.UpdateFromData(updatedData);
+        // Update the ViewModel to refresh UI
+        cardVm.UpdateFromData(model);
+
         ApplyFilter();
         LoadCategories();
     }

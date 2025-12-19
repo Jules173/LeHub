@@ -12,12 +12,15 @@ public partial class PresetFormWindow : Window, INotifyPropertyChanged
 {
     private string _presetName = string.Empty;
     private int _delayMs = 200;
+    private string _searchText = string.Empty;
+    private readonly List<SelectableApp> _allApps = new();
 
     public PresetFormWindow()
     {
         InitializeComponent();
         DataContext = this;
         AvailableApps = new ObservableCollection<SelectableApp>();
+        FilteredApps = new ObservableCollection<SelectableApp>();
     }
 
     public string PresetName
@@ -40,21 +43,60 @@ public partial class PresetFormWindow : Window, INotifyPropertyChanged
         }
     }
 
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (_searchText != value)
+            {
+                _searchText = value;
+                OnPropertyChanged();
+                ApplyFilter();
+            }
+        }
+    }
+
     public ObservableCollection<SelectableApp> AvailableApps { get; }
+    public ObservableCollection<SelectableApp> FilteredApps { get; }
 
     public Preset? ResultPreset { get; private set; }
 
     public void LoadApps(IEnumerable<AppCardViewModel> apps)
     {
+        _allApps.Clear();
         AvailableApps.Clear();
+        FilteredApps.Clear();
+
         foreach (var app in apps)
         {
-            AvailableApps.Add(new SelectableApp
+            var selectableApp = new SelectableApp
             {
                 Id = app.Id,
                 Name = app.Name,
                 IsSelected = false
-            });
+            };
+            _allApps.Add(selectableApp);
+            AvailableApps.Add(selectableApp);
+            FilteredApps.Add(selectableApp);
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        FilteredApps.Clear();
+
+        var filtered = _allApps.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var search = _searchText.ToLowerInvariant();
+            filtered = filtered.Where(a => a.Name.ToLowerInvariant().Contains(search));
+        }
+
+        foreach (var app in filtered)
+        {
+            FilteredApps.Add(app);
         }
     }
 
@@ -67,7 +109,8 @@ public partial class PresetFormWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var selectedApps = AvailableApps.Where(a => a.IsSelected).ToList();
+        // Get selected apps from all apps (not just filtered)
+        var selectedApps = _allApps.Where(a => a.IsSelected).ToList();
         if (selectedApps.Count == 0)
         {
             MessageBox.Show("Selectionnez au moins une application.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);

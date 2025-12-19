@@ -1,0 +1,45 @@
+# Build results
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Cache files
+*.cache
+*.cachefile
+
+# SQLite databases (local data)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# NuGet
+*.nupkg
+packages/
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Build artifacts
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Publish
+publish/

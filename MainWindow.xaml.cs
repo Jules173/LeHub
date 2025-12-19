@@ -192,4 +192,64 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    private void MenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is AppCardViewModel app)
+        {
+            ShowAppContextMenu(element, app);
+            e.Handled = true;
+        }
+    }
+
+    private void Card_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is AppCardViewModel app)
+        {
+            ShowAppContextMenu(element, app);
+            e.Handled = true;
+        }
+    }
+
+    private void ShowAppContextMenu(FrameworkElement placementTarget, AppCardViewModel app)
+    {
+        var menu = new ContextMenu();
+
+        var launchItem = new MenuItem { Header = "Lancer", FontWeight = FontWeights.SemiBold };
+        launchItem.Click += (_, _) => _viewModel.ExecuteLaunchApp(app);
+        menu.Items.Add(launchItem);
+
+        menu.Items.Add(new Separator());
+
+        var editItem = new MenuItem { Header = "Modifier" };
+        editItem.Click += (_, _) => OnRequestEditApp(app);
+        menu.Items.Add(editItem);
+
+        var openLocationItem = new MenuItem { Header = "Ouvrir l'emplacement" };
+        openLocationItem.Click += (_, _) => _viewModel.OpenLocationCommand.Execute(app);
+        menu.Items.Add(openLocationItem);
+
+        var copyPathItem = new MenuItem { Header = "Copier le chemin" };
+        copyPathItem.Click += (_, _) => _viewModel.CopyPathCommand.Execute(app);
+        menu.Items.Add(copyPathItem);
+
+        menu.Items.Add(new Separator());
+
+        var adminItem = new MenuItem { Header = "Lancer en admin" };
+        adminItem.Click += (_, _) => _viewModel.LaunchAsAdminCommand.Execute(app);
+        menu.Items.Add(adminItem);
+
+        menu.Items.Add(new Separator());
+
+        var deleteItem = new MenuItem
+        {
+            Header = "Supprimer",
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentRedBrush")
+        };
+        deleteItem.Click += (_, _) => _viewModel.ExecuteDeleteApp(app);
+        menu.Items.Add(deleteItem);
+
+        menu.PlacementTarget = placementTarget;
+        menu.IsOpen = true;
+    }
 }

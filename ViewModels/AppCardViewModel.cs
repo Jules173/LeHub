@@ -16,7 +16,8 @@ public class AppCardViewModel : INotifyPropertyChanged
     private string _name = string.Empty;
     private string _exePath = string.Empty;
     private string? _arguments;
-    private string _category = string.Empty;
+    private int? _categoryId;
+    private Category? _category;
     private int _sortOrder;
 
     public AppCardViewModel(AppEntry app)
@@ -26,6 +27,7 @@ public class AppCardViewModel : INotifyPropertyChanged
         _exePath = app.ExePath;
         _arguments = app.Arguments;
         _isFavorite = app.IsFavorite;
+        _categoryId = app.CategoryId;
         _category = app.Category;
         _sortOrder = app.SortOrder;
 
@@ -78,7 +80,22 @@ public class AppCardViewModel : INotifyPropertyChanged
         }
     }
 
-    public string Category
+    public int? CategoryId
+    {
+        get => _categoryId;
+        set
+        {
+            if (_categoryId != value)
+            {
+                _categoryId = value;
+                _app.CategoryId = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CategoryName));
+            }
+        }
+    }
+
+    public Category? Category
     {
         get => _category;
         set
@@ -87,10 +104,15 @@ public class AppCardViewModel : INotifyPropertyChanged
             {
                 _category = value;
                 _app.Category = value;
+                _categoryId = value?.Id;
+                _app.CategoryId = value?.Id;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(CategoryName));
             }
         }
     }
+
+    public string CategoryName => _category?.Name ?? "";
 
     public int SortOrder
     {
@@ -175,30 +197,44 @@ public class AppCardViewModel : INotifyPropertyChanged
         Name = _app.Name;
         ExePath = _app.ExePath;
         Arguments = _app.Arguments;
+        CategoryId = _app.CategoryId;
         Category = _app.Category;
         SortOrder = _app.SortOrder;
         IsFavorite = _app.IsFavorite;
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(TagsDisplay));
+        OnPropertyChanged(nameof(CategoryName));
         CheckExeExists();
         RefreshIcon();
     }
 
     public void UpdateFromData(AppEntry data)
     {
+        // Update the internal model
         _app.Name = data.Name;
         _app.ExePath = data.ExePath;
         _app.Arguments = data.Arguments;
+        _app.CategoryId = data.CategoryId;
         _app.Category = data.Category;
         _app.Tags = data.Tags;
 
-        Name = data.Name;
-        ExePath = data.ExePath;
-        Arguments = data.Arguments;
-        Category = data.Category;
+        // Force update the backing fields and notify (bypass equality check)
+        _name = data.Name;
+        _exePath = data.ExePath;
+        _arguments = data.Arguments;
+        _categoryId = data.CategoryId;
+        _category = data.Category;
 
+        // Notify all properties changed
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(ExePath));
+        OnPropertyChanged(nameof(Arguments));
+        OnPropertyChanged(nameof(CategoryId));
+        OnPropertyChanged(nameof(Category));
+        OnPropertyChanged(nameof(CategoryName));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(TagsDisplay));
+
         CheckExeExists();
         RefreshIcon();
     }

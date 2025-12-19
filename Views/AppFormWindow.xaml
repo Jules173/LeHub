@@ -73,9 +73,28 @@
             <TextBlock Text="Categorie (optionnel)"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        Margin="0,0,0,6"/>
-            <TextBox x:Name="CategoryTextBox"
-                     Style="{StaticResource SearchTextBox}"
-                     Text="{Binding Category, UpdateSourceTrigger=PropertyChanged}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox x:Name="CategoryCombo"
+                          Grid.Column="0"
+                          ItemsSource="{Binding Categories}"
+                          SelectedItem="{Binding SelectedCategory}"
+                          DisplayMemberPath="Name"
+                          IsEditable="True"
+                          Text="{Binding CategoryText, UpdateSourceTrigger=PropertyChanged}"
+                          Background="{StaticResource BackgroundMediumBrush}"
+                          Foreground="{StaticResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="+"
+                        Style="{StaticResource ButtonBase}"
+                        Width="36"
+                        Margin="8,0,0,0"
+                        ToolTip="Nouvelle categorie"
+                        Click="AddCategoryButton_Click"/>
+            </Grid>
         </StackPanel>
 
         <!-- Tags -->

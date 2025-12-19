@@ -50,8 +50,34 @@
             <TextBlock Text="Applications (cocher pour inclure)"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        Margin="0,0,0,6"/>
-            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="200">
-                <ItemsControl ItemsSource="{Binding AvailableApps}">
+            <!-- Search Box -->
+            <Grid Margin="0,0,0,8">
+                <TextBox x:Name="SearchBox"
+                         Style="{StaticResource SearchTextBox}"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="Rechercher..."
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           IsHitTestVisible="False">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Text, ElementName=SearchBox}" Value=""/>
+                                        <Condition Binding="{Binding IsFocused, ElementName=SearchBox}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="180">
+                <ItemsControl ItemsSource="{Binding FilteredApps}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected}"
