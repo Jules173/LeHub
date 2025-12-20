@@ -45,71 +45,73 @@ public partial class MainWindow : Window
         source?.AddHook(WndProc);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int x;
+        public int y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        const int WM_NCHITTEST = 0x0084;
-        const int HTLEFT = 10;
-        const int HTRIGHT = 11;
-        const int HTTOP = 12;
-        const int HTTOPLEFT = 13;
-        const int HTTOPRIGHT = 14;
-        const int HTBOTTOM = 15;
-        const int HTBOTTOMLEFT = 16;
-        const int HTBOTTOMRIGHT = 17;
+        const int WM_GETMINMAXINFO = 0x0024;
 
-        if (msg == WM_NCHITTEST)
+        // Handle maximize to respect taskbar
+        if (msg == WM_GETMINMAXINFO)
         {
-            var point = PointFromScreen(new Point(
-                (short)(lParam.ToInt32() & 0xFFFF),
-                (short)(lParam.ToInt32() >> 16)));
-
-            const int borderSize = 6;
-            var width = ActualWidth;
-            var height = ActualHeight;
-
-            // Check corners first (larger hit area)
-            if (point.X < borderSize && point.Y < borderSize)
+            var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (monitor != IntPtr.Zero)
             {
-                handled = true;
-                return (IntPtr)HTTOPLEFT;
+                var monitorInfo = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                if (GetMonitorInfo(monitor, ref monitorInfo))
+                {
+                    var work = monitorInfo.rcWork;
+                    var monitor_rect = monitorInfo.rcMonitor;
+                    mmi.ptMaxPosition.x = work.left - monitor_rect.left;
+                    mmi.ptMaxPosition.y = work.top - monitor_rect.top;
+                    mmi.ptMaxSize.x = work.right - work.left;
+                    mmi.ptMaxSize.y = work.bottom - work.top;
+                    Marshal.StructureToPtr(mmi, lParam, true);
+                }
             }
-            if (point.X >= width - borderSize && point.Y < borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTTOPRIGHT;
-            }
-            if (point.X < borderSize && point.Y >= height - borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTBOTTOMLEFT;
-            }
-            if (point.X >= width - borderSize && point.Y >= height - borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTBOTTOMRIGHT;
-            }
-
-            // Then check edges
-            if (point.X < borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTLEFT;
-            }
-            if (point.X >= width - borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTRIGHT;
-            }
-            if (point.Y < borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTTOP;
-            }
-            if (point.Y >= height - borderSize)
-            {
-                handled = true;
-                return (IntPtr)HTBOTTOM;
-            }
+            handled = false;
         }
 
         return IntPtr.Zero;
@@ -126,11 +128,6 @@ public partial class MainWindow : Window
         {
             DragMove();
         }
-    }
-
-    private void TitleBar_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        // No action needed
     }
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)

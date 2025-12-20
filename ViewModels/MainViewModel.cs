@@ -15,10 +15,10 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private string _searchText = string.Empty;
     private bool _showFavoritesOnly;
-    private Tag? _selectedTag;
+    private TagFilterOption? _selectedTagFilter;
     private ObservableCollection<AppCardViewModel> _filteredApps = new();
     private readonly List<AppCardViewModel> _allApps = new();
-    private ObservableCollection<Tag> _allTags = new();
+    private ObservableCollection<TagFilterOption> _tagFilterOptions = new();
     private ObservableCollection<PresetViewModel> _presets = new();
     private AppCardViewModel? _selectedApp;
 
@@ -54,24 +54,24 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public ObservableCollection<Tag> AllTags
+    public ObservableCollection<TagFilterOption> TagFilterOptions
     {
-        get => _allTags;
+        get => _tagFilterOptions;
         private set
         {
-            _allTags = value;
+            _tagFilterOptions = value;
             OnPropertyChanged();
         }
     }
 
-    public Tag? SelectedTag
+    public TagFilterOption? SelectedTagFilter
     {
-        get => _selectedTag;
+        get => _selectedTagFilter;
         set
         {
-            if (_selectedTag != value)
+            if (_selectedTagFilter != value)
             {
-                _selectedTag = value;
+                _selectedTagFilter = value;
                 OnPropertyChanged();
                 ApplyFilter();
             }
@@ -176,10 +176,15 @@ public class MainViewModel : INotifyPropertyChanged
     public void LoadTags()
     {
         var tags = DatabaseService.Instance.GetAllTags();
-        // Insert a "null" tag at the beginning for "All"
-        var tagsWithAll = new List<Tag> { new Tag { Id = 0, Name = "Tous" } };
-        tagsWithAll.AddRange(tags);
-        AllTags = new ObservableCollection<Tag>(tagsWithAll);
+        var options = new List<TagFilterOption> { TagFilterOption.All };
+        options.AddRange(tags.Select(TagFilterOption.FromTag));
+        TagFilterOptions = new ObservableCollection<TagFilterOption>(options);
+
+        // Select "Tous" by default if nothing selected
+        if (_selectedTagFilter == null)
+        {
+            SelectedTagFilter = TagFilterOptions.FirstOrDefault();
+        }
     }
 
     private void ApplyFilter()
@@ -191,10 +196,11 @@ public class MainViewModel : INotifyPropertyChanged
             filtered = filtered.Where(a => a.IsFavorite);
         }
 
-        // Filter by tag (Id = 0 means "All")
-        if (_selectedTag != null && _selectedTag.Id != 0)
+        // Filter by tag (Tag = null means "All")
+        if (_selectedTagFilter?.Tag != null)
         {
-            filtered = filtered.Where(a => a.Tags.Any(t => t.Id == _selectedTag.Id));
+            var tagId = _selectedTagFilter.Tag.Id;
+            filtered = filtered.Where(a => a.Tags.Any(t => t.Id == tagId));
         }
 
         if (!string.IsNullOrWhiteSpace(_searchText))

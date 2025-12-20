@@ -18,9 +18,17 @@
         Drop="Window_Drop"
         DragOver="Window_DragOver"
         WindowStyle="None"
-        ResizeMode="CanResizeWithGrip"
+        ResizeMode="CanResize"
         x:Name="MainWin"
         StateChanged="Window_StateChanged">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      ResizeBorderThickness="6"
+                      GlassFrameThickness="0"
+                      CornerRadius="0"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
@@ -38,9 +46,7 @@
         <Border Grid.Row="0"
                 Background="{StaticResource BackgroundMediumBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="0,0,0,1"
-                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
-                MouseLeftButtonUp="TitleBar_MouseLeftButtonUp">
+                BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -48,7 +54,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- App Title -->
+                <!-- App Title (non-draggable) -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="LeHub"
                                Foreground="{StaticResource TextPrimaryBrush}"
@@ -56,7 +62,12 @@
                                FontSize="12"/>
                 </StackPanel>
 
-                <!-- Window Buttons -->
+                <!-- Draggable empty zone (only this zone allows drag) -->
+                <Border Grid.Column="1"
+                        Background="Transparent"
+                        MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"/>
+
+                <!-- Window Buttons (non-draggable) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource WindowControlButton}"
@@ -268,9 +279,9 @@
                                        VerticalAlignment="Center"
                                        Margin="0,0,8,0"/>
                             <ComboBox x:Name="TagsCombo"
-                                      ItemsSource="{Binding AllTags}"
-                                      SelectedItem="{Binding SelectedTag}"
-                                      DisplayMemberPath="Name"
+                                      ItemsSource="{Binding TagFilterOptions}"
+                                      SelectedItem="{Binding SelectedTagFilter}"
+                                      DisplayMemberPath="Label"
                                       MinWidth="140"
                                       MaxWidth="200"/>
                         </StackPanel>
@@ -325,17 +336,18 @@
                                                 <Setter Property="Padding" Value="16"/>
                                                 <Setter Property="Margin" Value="8"/>
                                             </DataTrigger>
-                                            <!-- Selected state with shadow -->
+                                            <!-- Hover state - visible with accent border -->
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                            </Trigger>
+                                            <!-- Selected state with shadow (higher priority than hover) -->
                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                 <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
                                                 <Setter Property="BorderThickness" Value="2"/>
-                                                <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                                <Setter Property="Background" Value="#404858"/>
                                                 <Setter Property="Effect" Value="{StaticResource CardSelectedShadow}"/>
                                             </DataTrigger>
-                                            <!-- Hover state -->
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
-                                            </Trigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
@@ -450,42 +462,13 @@
                                     <!-- Spacer -->
                                     <Border Grid.Row="2"/>
 
-                                    <!-- Action Buttons: Lancer | Supprimer | ⋯ -->
-                                    <Grid Grid.Row="3">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <Button Grid.Column="0"
-                                                Content="Lancer"
-                                                Style="{StaticResource PrimaryButton}"
-                                                Padding="10,5"
-                                                FontSize="11"
-                                                IsEnabled="{Binding CanLaunch}"
-                                                Command="{Binding DataContext.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"/>
-
-                                        <Button Grid.Column="1"
-                                                Style="{StaticResource DangerButton}"
-                                                Padding="8,5"
-                                                Margin="6,0,0,0"
-                                                ToolTip="Supprimer"
-                                                Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}">
-                                            <Path Data="M3,4 L3,14 L11,14 L11,4 M1,4 L13,4 M5,2 L9,2 M5,6 L5,12 M9,6 L9,12"
-                                                  Stroke="{StaticResource AccentRedBrush}"
-                                                  StrokeThickness="1.2"
-                                                  Width="14" Height="14"
-                                                  Stretch="Uniform"/>
-                                        </Button>
-
-                                        <Button Grid.Column="3"
+                                    <!-- Action Buttons: Lancer | Supprimer | ... -->
+                                    <DockPanel Grid.Row="3">
+                                        <!-- Right side: More options button -->
+                                        <Button DockPanel.Dock="Right"
                                                 Style="{StaticResource SmallButton}"
-                                                MinWidth="36"
-                                                Padding="8,4"
+                                                Width="32"
+                                                Padding="6,4"
                                                 ToolTip="Plus d'options"
                                                 Click="MenuButton_Click"
                                                 Tag="{Binding}">
@@ -494,7 +477,26 @@
                                                   Width="14" Height="10"
                                                   Stretch="Uniform"/>
                                         </Button>
-                                    </Grid>
+
+                                        <!-- Left side: Lancer + Supprimer buttons -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="Lancer"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    Padding="12,5"
+                                                    FontSize="11"
+                                                    IsEnabled="{Binding CanLaunch}"
+                                                    Command="{Binding DataContext.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+
+                                            <Button Content="Supprimer"
+                                                    Style="{StaticResource DangerButton}"
+                                                    Padding="10,5"
+                                                    FontSize="11"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </DockPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
