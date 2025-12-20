@@ -246,7 +246,9 @@ public class AppCardViewModel : INotifyPropertyChanged
 
     public void UpdateFromData(AppEntry data)
     {
-        // Update the internal model
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppCardViewModel.UpdateFromData: Before - Id={Id}, _name='{_name}', _app.Name='{_app.Name}'");
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppCardViewModel.UpdateFromData: Incoming data.Name='{data.Name}'");
+
         _app.Name = data.Name;
         _app.ExePath = data.ExePath;
         _app.Arguments = data.Arguments;
@@ -254,14 +256,14 @@ public class AppCardViewModel : INotifyPropertyChanged
         _app.Category = data.Category;
         _app.Tags = data.Tags;
 
-        // Force update the backing fields and notify (bypass equality check)
         _name = data.Name;
         _exePath = data.ExePath;
         _arguments = data.Arguments;
         _categoryId = data.CategoryId;
         _category = data.Category;
 
-        // Notify all properties changed
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppCardViewModel.UpdateFromData: After - _name='{_name}', _app.Name='{_app.Name}'");
+
         OnPropertyChanged(nameof(Name));
         OnPropertyChanged(nameof(ExePath));
         OnPropertyChanged(nameof(Arguments));
@@ -271,6 +273,8 @@ public class AppCardViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(TagsDisplay));
         OnPropertyChanged(nameof(DisplayTags));
+
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppCardViewModel.UpdateFromData: PropertyChanged fired, Name property now returns='{Name}'");
 
         CheckExeExists();
         RefreshIcon();

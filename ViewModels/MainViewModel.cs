@@ -564,7 +564,14 @@ public class MainViewModel : INotifyPropertyChanged
         // Update the ViewModel to refresh UI
         cardVm.UpdateFromData(model);
 
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateExistingApp: After UpdateFromData - cardVm.Name='{cardVm.Name}'");
+
         ApplyFilter();
+
+        // Verify the VM in the filtered list has the updated name
+        var vmInList = FilteredApps.FirstOrDefault(a => a.Id == cardVm.Id);
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateExistingApp: After ApplyFilter - vmInList?.Name='{vmInList?.Name}', Same instance={ReferenceEquals(vmInList, cardVm)}");
+
         LoadTags();
     }
 

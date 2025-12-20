@@ -9,6 +9,7 @@ namespace LeHub.Services;
 public class DatabaseService
 {
     private readonly string _connectionString;
+    private readonly string _dbPath;
     private static DatabaseService? _instance;
     public static DatabaseService Instance => _instance ??= new DatabaseService();
 
@@ -20,8 +21,8 @@ public class DatabaseService
 
         Directory.CreateDirectory(appDataPath);
 
-        var dbPath = Path.Combine(appDataPath, "lehub.db");
-        _connectionString = $"Data Source={dbPath}";
+        _dbPath = Path.Combine(appDataPath, "lehub.db");
+        _connectionString = $"Data Source={_dbPath}";
 
         InitializeDatabase();
     }
@@ -399,7 +400,7 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@id", app.Id);
         var rowsAffected = cmd.ExecuteNonQuery();
 
-        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateApp: Id={app.Id}, Name='{app.Name}', RowsAffected={rowsAffected}");
+        System.Diagnostics.Debug.WriteLine($"[LeHub] DatabaseService.UpdateApp: DbPath='{_dbPath}', Id={app.Id}, Name='{app.Name}', RowsAffected={rowsAffected}");
 
         var clearCmd = connection.CreateCommand();
         clearCmd.CommandText = "DELETE FROM app_tags WHERE app_id = @id";

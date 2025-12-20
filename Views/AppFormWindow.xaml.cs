@@ -37,23 +37,16 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public string AppName
+    public string EditName
     {
         get => _name;
         set
         {
-            _name = value;
-            OnPropertyChanged(nameof(Name));
-        }
-    }
-
-    public new string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            OnPropertyChanged();
+            if (_name != value)
+            {
+                _name = value;
+                OnPropertyChanged();
+            }
         }
     }
 
@@ -137,9 +130,11 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
     public void LoadFromApp(AppEntry app)
     {
         EditingAppId = app.Id;
-        Name = app.Name;
+        EditName = app.Name;
         ExePath = app.ExePath;
         Arguments = app.Arguments ?? "";
+
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppFormWindow.LoadFromApp: Id={EditingAppId}, InitialName='{EditName}'");
 
         // Mark existing tags as selected
         foreach (var tag in app.Tags)
@@ -156,7 +151,7 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
 
     public void PreFill(string name, string exePath)
     {
-        Name = name;
+        EditName = name;
         ExePath = exePath;
     }
 
@@ -173,9 +168,10 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         {
             ExePath = dialog.FileName;
 
-            if (string.IsNullOrWhiteSpace(Name))
+            // Only auto-fill name if empty (never overwrite user input)
+            if (string.IsNullOrWhiteSpace(EditName))
             {
-                Name = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
+                EditName = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
             }
         }
     }
@@ -207,12 +203,14 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(Name))
+        if (string.IsNullOrWhiteSpace(EditName))
         {
             MessageBox.Show("Le nom est obligatoire.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
             NameTextBox.Focus();
             return;
         }
+
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppFormWindow.SaveButton_Click: Id={EditingAppId}, NewName='{EditName.Trim()}', IsEditMode={IsEditMode}");
 
         // Get selected tags
         var selectedTags = _allTags.Where(t => t.IsSelected)
@@ -222,11 +220,13 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         ResultApp = new AppEntry
         {
             Id = EditingAppId,
-            Name = Name.Trim(),
+            Name = EditName.Trim(),
             ExePath = ExePath.Trim(),
             Arguments = string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim(),
             Tags = selectedTags
         };
+
+        System.Diagnostics.Debug.WriteLine($"[LeHub] AppFormWindow.SaveButton_Click: ResultApp.Id={ResultApp.Id}, ResultApp.Name='{ResultApp.Name}'");
 
         DialogResult = true;
         Close();
