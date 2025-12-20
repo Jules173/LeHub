@@ -539,14 +539,17 @@ public class MainViewModel : INotifyPropertyChanged
     {
         var model = cardVm.GetModel();
 
-        // Preserve the original Id
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateExistingApp: Original Id={model.Id}, Original Name='{model.Name}'");
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateExistingApp: New Name='{updatedData.Name}'");
+
+        // Preserve the original Id and other fields
         updatedData.Id = model.Id;
         updatedData.SortOrder = model.SortOrder;
         updatedData.IsFavorite = model.IsFavorite;
         updatedData.CreatedAt = model.CreatedAt;
         updatedData.UpdatedAt = DateTime.Now;
 
-        // Update the model
+        // Update the model directly
         model.Name = updatedData.Name;
         model.ExePath = updatedData.ExePath;
         model.Arguments = updatedData.Arguments;
@@ -555,7 +558,8 @@ public class MainViewModel : INotifyPropertyChanged
         model.Tags = updatedData.Tags;
 
         // Save to database
-        DatabaseService.Instance.UpdateApp(model);
+        var rowsAffected = DatabaseService.Instance.UpdateApp(model);
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateExistingApp: DB update returned {rowsAffected} rows affected");
 
         // Update the ViewModel to refresh UI
         cardVm.UpdateFromData(model);

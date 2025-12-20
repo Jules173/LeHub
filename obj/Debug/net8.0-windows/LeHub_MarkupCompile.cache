@@ -1,5 +1,5 @@
 ﻿LeHub
-
+1.0.0.0
 
 winexe
 C#
@@ -12,9 +12,9 @@ TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR
 C:\Users\jules\source\repos\LeHub\LeHub\App.xaml
 6-17714013
 
-191966951224
+21-86801994
 211710811623
 MainWindow.xaml;Resources\Styles.xaml;Views\AppFormWindow.xaml;Views\InputDialog.xaml;Views\PresetFormWindow.xaml;Views\TagsManagerWindow.xaml;
 
-False
+True
 

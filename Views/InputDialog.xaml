@@ -2,13 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Saisie"
-        Width="350"
-        Height="160"
+        SizeToContent="WidthAndHeight"
+        MinWidth="420"
+        MinHeight="160"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{StaticResource BackgroundDarkBrush}">
 
-    <Grid Margin="20">
+    <Grid Margin="24" MinWidth="380">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>

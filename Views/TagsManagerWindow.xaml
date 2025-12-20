@@ -75,7 +75,11 @@
                                         Padding="8,4"
                                         Click="DeleteTagButton_Click"
                                         Tag="{Binding}">
-                                    <TextBlock Text="🗑" FontSize="11"/>
+                                    <Path Data="M3,4 L3,14 L11,14 L11,4 M1,4 L13,4 M5,2 L9,2 M5,6 L5,12 M9,6 L9,12"
+                                          Stroke="{StaticResource AccentRedBrush}"
+                                          StrokeThickness="1.2"
+                                          Width="14" Height="14"
+                                          Stretch="Uniform"/>
                                 </Button>
                             </Grid>
                         </Border>

@@ -1,12 +1,16 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Shapes;
 using LeHub.ViewModels;
 using LeHub.Views;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
 using DataFormats = System.Windows.DataFormats;
 using MessageBox = System.Windows.MessageBox;
+using Point = System.Windows.Point;
 
 namespace LeHub;
 
@@ -26,6 +30,149 @@ public partial class MainWindow : Window
         _viewModel.RequestAddAppWithData += OnRequestAddAppWithData;
         _viewModel.RequestAddPreset += OnRequestAddPreset;
         _viewModel.RequestManageTags += OnRequestManageTags;
+
+        SourceInitialized += MainWindow_SourceInitialized;
+    }
+
+    // Win32 interop for proper window resizing
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var source = HwndSource.FromHwnd(handle);
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_NCHITTEST = 0x0084;
+        const int HTLEFT = 10;
+        const int HTRIGHT = 11;
+        const int HTTOP = 12;
+        const int HTTOPLEFT = 13;
+        const int HTTOPRIGHT = 14;
+        const int HTBOTTOM = 15;
+        const int HTBOTTOMLEFT = 16;
+        const int HTBOTTOMRIGHT = 17;
+
+        if (msg == WM_NCHITTEST)
+        {
+            var point = PointFromScreen(new Point(
+                (short)(lParam.ToInt32() & 0xFFFF),
+                (short)(lParam.ToInt32() >> 16)));
+
+            const int borderSize = 6;
+            var width = ActualWidth;
+            var height = ActualHeight;
+
+            // Check corners first (larger hit area)
+            if (point.X < borderSize && point.Y < borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTTOPLEFT;
+            }
+            if (point.X >= width - borderSize && point.Y < borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTTOPRIGHT;
+            }
+            if (point.X < borderSize && point.Y >= height - borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTBOTTOMLEFT;
+            }
+            if (point.X >= width - borderSize && point.Y >= height - borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTBOTTOMRIGHT;
+            }
+
+            // Then check edges
+            if (point.X < borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTLEFT;
+            }
+            if (point.X >= width - borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTRIGHT;
+            }
+            if (point.Y < borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTTOP;
+            }
+            if (point.Y >= height - borderSize)
+            {
+                handled = true;
+                return (IntPtr)HTBOTTOM;
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    // Title bar event handlers
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximize();
+        }
+        else
+        {
+            DragMove();
+        }
+    }
+
+    private void TitleBar_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // No action needed
+    }
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleMaximize();
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void ToggleMaximize()
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    private void Window_StateChanged(object? sender, EventArgs e)
+    {
+        // Update maximize icon based on window state
+        if (MaximizeIcon != null)
+        {
+            if (WindowState == WindowState.Maximized)
+            {
+                // Restore icon (two overlapping rectangles)
+                MaximizeIcon.Data = System.Windows.Media.Geometry.Parse("M2,0 L10,0 L10,8 L2,8 Z M0,2 L8,2 L8,10 L0,10 Z");
+                MaximizeButton.ToolTip = "Restaurer";
+            }
+            else
+            {
+                // Maximize icon (single rectangle)
+                MaximizeIcon.Data = System.Windows.Media.Geometry.Parse("M0,0 L10,0 L10,10 L0,10 Z");
+                MaximizeButton.ToolTip = "Agrandir";
+            }
+        }
     }
 
     private void OnRequestAddApp()
@@ -263,7 +410,7 @@ public partial class MainWindow : Window
 
         var deleteItem = new MenuItem
         {
-            Header = "🗑 Supprimer",
+            Header = "Supprimer",
             Foreground = (System.Windows.Media.Brush)FindResource("AccentRedBrush"),
             FontWeight = FontWeights.SemiBold
         };

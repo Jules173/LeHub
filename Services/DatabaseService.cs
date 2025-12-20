@@ -379,7 +379,7 @@ public class DatabaseService
         return appId;
     }
 
-    public void UpdateApp(AppEntry app)
+    public int UpdateApp(AppEntry app)
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
@@ -397,7 +397,9 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@catId", app.CategoryId.HasValue ? app.CategoryId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@sort", app.SortOrder);
         cmd.Parameters.AddWithValue("@id", app.Id);
-        cmd.ExecuteNonQuery();
+        var rowsAffected = cmd.ExecuteNonQuery();
+
+        System.Diagnostics.Debug.WriteLine($"[LeHub] UpdateApp: Id={app.Id}, Name='{app.Name}', RowsAffected={rowsAffected}");
 
         var clearCmd = connection.CreateCommand();
         clearCmd.CommandText = "DELETE FROM app_tags WHERE app_id = @id";
@@ -409,6 +411,8 @@ public class DatabaseService
             var tagId = GetOrCreateTag(connection, tag.Name);
             LinkAppTag(connection, app.Id, tagId);
         }
+
+        return rowsAffected;
     }
 
     public void UpdateSortOrder(int appId, int sortOrder)

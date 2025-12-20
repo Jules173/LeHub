@@ -16,7 +16,11 @@
         KeyDown="Window_KeyDown"
         AllowDrop="True"
         Drop="Window_Drop"
-        DragOver="Window_DragOver">
+        DragOver="Window_DragOver"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip"
+        x:Name="MainWin"
+        StateChanged="Window_StateChanged">
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
@@ -25,10 +29,79 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0"
+                Background="{StaticResource BackgroundMediumBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
+                MouseLeftButtonUp="TitleBar_MouseLeftButtonUp">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- App Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="LeHub"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               FontWeight="SemiBold"
+                               FontSize="12"/>
+                </StackPanel>
+
+                <!-- Window Buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="MinimizeButton"
+                            Style="{StaticResource WindowControlButton}"
+                            Click="MinimizeButton_Click"
+                            ToolTip="Reduire">
+                        <Path Data="M0,5 L10,5"
+                              Stroke="{StaticResource TextSecondaryBrush}"
+                              StrokeThickness="1"
+                              Width="10" Height="10"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="MaximizeButton"
+                            Style="{StaticResource WindowControlButton}"
+                            Click="MaximizeButton_Click"
+                            ToolTip="Agrandir">
+                        <Path x:Name="MaximizeIcon"
+                              Data="M0,0 L10,0 L10,10 L0,10 Z"
+                              Stroke="{StaticResource TextSecondaryBrush}"
+                              StrokeThickness="1"
+                              Width="10" Height="10"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="CloseButton"
+                            Style="{StaticResource WindowCloseButton}"
+                            Click="CloseButton_Click"
+                            ToolTip="Fermer">
+                        <Path Data="M0,0 L10,10 M10,0 L0,10"
+                              Stroke="{StaticResource TextSecondaryBrush}"
+                              StrokeThickness="1"
+                              Width="10" Height="10"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
         <!-- Sidebar -->
         <Border Grid.Column="0"
@@ -135,7 +208,7 @@
                                FontSize="10"
                                TextAlignment="Center"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="v2.2"
+                    <TextBlock Text="v2.3"
                                Style="{StaticResource SubtitleText}"
                                HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -198,7 +271,8 @@
                                       ItemsSource="{Binding AllTags}"
                                       SelectedItem="{Binding SelectedTag}"
                                       DisplayMemberPath="Name"
-                                      Width="120"/>
+                                      MinWidth="140"
+                                      MaxWidth="200"/>
                         </StackPanel>
 
                         <!-- Favorites Toggle -->
@@ -231,25 +305,34 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border x:Name="CardBorder"
-                                    Width="240"
                                     Background="{StaticResource CardBackgroundBrush}"
                                     BorderBrush="{StaticResource BorderSubtleBrush}"
                                     BorderThickness="1"
                                     CornerRadius="6"
-                                    Padding="12"
-                                    Margin="6"
                                     Cursor="Hand"
                                     MouseLeftButtonDown="Card_MouseLeftButtonDown"
                                     MouseRightButtonUp="Card_MouseRightButtonUp"
                                     Tag="{Binding}">
                                 <Border.Style>
                                     <Style TargetType="Border">
+                                        <Setter Property="Width" Value="240"/>
+                                        <Setter Property="Padding" Value="12"/>
+                                        <Setter Property="Margin" Value="6"/>
                                         <Style.Triggers>
+                                            <!-- Responsive: Larger cards when maximized -->
+                                            <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                <Setter Property="Width" Value="300"/>
+                                                <Setter Property="Padding" Value="16"/>
+                                                <Setter Property="Margin" Value="8"/>
+                                            </DataTrigger>
+                                            <!-- Selected state with shadow -->
                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                 <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
                                                 <Setter Property="BorderThickness" Value="2"/>
                                                 <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                                <Setter Property="Effect" Value="{StaticResource CardSelectedShadow}"/>
                                             </DataTrigger>
+                                            <!-- Hover state -->
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
                                             </Trigger>
@@ -289,16 +372,37 @@
 
                                         <!-- Icon -->
                                         <Border Grid.Column="0"
-                                                Width="40"
-                                                Height="40"
                                                 CornerRadius="6"
                                                 Background="{StaticResource BackgroundMediumBrush}"
                                                 Margin="0,0,10,0">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Width" Value="40"/>
+                                                    <Setter Property="Height" Value="40"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                            <Setter Property="Width" Value="48"/>
+                                                            <Setter Property="Height" Value="48"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <Image Source="{Binding Icon}"
-                                                   Width="32"
-                                                   Height="32"
                                                    Stretch="Uniform"
-                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                                <Image.Style>
+                                                    <Style TargetType="Image">
+                                                        <Setter Property="Width" Value="32"/>
+                                                        <Setter Property="Height" Value="32"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                                <Setter Property="Width" Value="40"/>
+                                                                <Setter Property="Height" Value="40"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Image.Style>
+                                            </Image>
                                         </Border>
 
                                         <!-- Name + Missing badge -->
@@ -367,26 +471,29 @@
                                         <Button Grid.Column="1"
                                                 Style="{StaticResource DangerButton}"
                                                 Padding="8,5"
-                                                FontSize="11"
                                                 Margin="6,0,0,0"
                                                 ToolTip="Supprimer"
                                                 Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="🗑" FontSize="11"/>
-                                            </StackPanel>
+                                            <Path Data="M3,4 L3,14 L11,14 L11,4 M1,4 L13,4 M5,2 L9,2 M5,6 L5,12 M9,6 L9,12"
+                                                  Stroke="{StaticResource AccentRedBrush}"
+                                                  StrokeThickness="1.2"
+                                                  Width="14" Height="14"
+                                                  Stretch="Uniform"/>
                                         </Button>
 
                                         <Button Grid.Column="3"
-                                                Content="⋯"
                                                 Style="{StaticResource SmallButton}"
-                                                FontSize="16"
-                                                FontWeight="Bold"
                                                 MinWidth="36"
-                                                Padding="8,2"
+                                                Padding="8,4"
                                                 ToolTip="Plus d'options"
                                                 Click="MenuButton_Click"
-                                                Tag="{Binding}"/>
+                                                Tag="{Binding}">
+                                            <Path Data="M2,5 A1.5,1.5 0 1,1 2,5.01 M7,5 A1.5,1.5 0 1,1 7,5.01 M12,5 A1.5,1.5 0 1,1 12,5.01"
+                                                  Fill="{StaticResource TextSecondaryBrush}"
+                                                  Width="14" Height="10"
+                                                  Stretch="Uniform"/>
+                                        </Button>
                                     </Grid>
                                 </Grid>
                             </Border>
@@ -395,5 +502,6 @@
                 </ItemsControl>
             </ScrollViewer>
         </DockPanel>
+        </Grid>
     </Grid>
 </Window>
