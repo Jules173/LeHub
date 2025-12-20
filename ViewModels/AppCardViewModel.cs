@@ -13,6 +13,7 @@ public class AppCardViewModel : INotifyPropertyChanged
     private ImageSource? _icon;
     private bool _isFavorite;
     private bool _isExeMissing;
+    private bool _isSelected;
     private string _name = string.Empty;
     private string _exePath = string.Empty;
     private string? _arguments;
@@ -134,6 +135,41 @@ public class AppCardViewModel : INotifyPropertyChanged
         ? string.Join(", ", Tags.Select(t => t.Name))
         : "";
 
+    // Display up to 2 tags + "+N" indicator
+    public List<string> DisplayTags
+    {
+        get
+        {
+            var result = new List<string>();
+            var tagNames = Tags.Select(t => t.Name).ToList();
+
+            if (tagNames.Count <= 2)
+            {
+                result.AddRange(tagNames);
+            }
+            else
+            {
+                result.Add(tagNames[0]);
+                result.Add(tagNames[1]);
+                result.Add($"+{tagNames.Count - 2}");
+            }
+            return result;
+        }
+    }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public bool IsFavorite
     {
         get => _isFavorite;
@@ -234,6 +270,7 @@ public class AppCardViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CategoryName));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(TagsDisplay));
+        OnPropertyChanged(nameof(DisplayTags));
 
         CheckExeExists();
         RefreshIcon();

@@ -14,16 +14,16 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
     private string _name = string.Empty;
     private string _exePath = string.Empty;
     private string _arguments = string.Empty;
-    private Category? _selectedCategory;
-    private string _categoryText = string.Empty;
-    private string _tagsText = string.Empty;
+    private string _tagSearchText = string.Empty;
     private bool _isEditMode;
+    private readonly List<SelectableTag> _allTags = new();
 
     public AppFormWindow()
     {
         InitializeComponent();
         DataContext = this;
-        LoadCategories();
+        FilteredTags = new ObservableCollection<SelectableTag>();
+        LoadTags();
     }
 
     public bool IsEditMode
@@ -77,54 +77,60 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public ObservableCollection<Category> Categories { get; } = new();
-
-    public Category? SelectedCategory
+    public string TagSearchText
     {
-        get => _selectedCategory;
+        get => _tagSearchText;
         set
         {
-            _selectedCategory = value;
-            OnPropertyChanged();
-            if (value != null)
+            if (_tagSearchText != value)
             {
-                _categoryText = value.Name;
-                OnPropertyChanged(nameof(CategoryText));
+                _tagSearchText = value;
+                OnPropertyChanged();
+                ApplyTagFilter();
             }
         }
     }
 
-    public string CategoryText
-    {
-        get => _categoryText;
-        set
-        {
-            _categoryText = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public string TagsText
-    {
-        get => _tagsText;
-        set
-        {
-            _tagsText = value;
-            OnPropertyChanged();
-        }
-    }
+    public ObservableCollection<SelectableTag> FilteredTags { get; }
 
     public AppEntry? ResultApp { get; private set; }
 
     public int EditingAppId { get; private set; }
 
-    private void LoadCategories()
+    private void LoadTags()
     {
-        Categories.Clear();
-        var cats = DatabaseService.Instance.GetAllCategories();
-        foreach (var cat in cats)
+        _allTags.Clear();
+        FilteredTags.Clear();
+
+        var tags = DatabaseService.Instance.GetAllTags();
+        foreach (var tag in tags)
         {
-            Categories.Add(cat);
+            var selectableTag = new SelectableTag
+            {
+                Id = tag.Id,
+                Name = tag.Name,
+                IsSelected = false
+            };
+            _allTags.Add(selectableTag);
+            FilteredTags.Add(selectableTag);
+        }
+    }
+
+    private void ApplyTagFilter()
+    {
+        FilteredTags.Clear();
+
+        var filtered = _allTags.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_tagSearchText))
+        {
+            var search = _tagSearchText.ToLowerInvariant();
+            filtered = filtered.Where(t => t.Name.ToLowerInvariant().Contains(search));
+        }
+
+        foreach (var tag in filtered)
+        {
+            FilteredTags.Add(tag);
         }
     }
 
@@ -135,17 +141,16 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         ExePath = app.ExePath;
         Arguments = app.Arguments ?? "";
 
-        if (app.Category != null)
+        // Mark existing tags as selected
+        foreach (var tag in app.Tags)
         {
-            SelectedCategory = Categories.FirstOrDefault(c => c.Id == app.Category.Id);
-            CategoryText = app.Category.Name;
-        }
-        else
-        {
-            CategoryText = "";
+            var selectableTag = _allTags.FirstOrDefault(t => t.Id == tag.Id);
+            if (selectableTag != null)
+            {
+                selectableTag.IsSelected = true;
+            }
         }
 
-        TagsText = string.Join(", ", app.Tags.Select(t => t.Name));
         IsEditMode = true;
     }
 
@@ -175,28 +180,29 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void AddCategoryButton_Click(object sender, RoutedEventArgs e)
+    private void AddTagButton_Click(object sender, RoutedEventArgs e)
     {
-        var categoryName = CategoryText?.Trim();
-        if (string.IsNullOrWhiteSpace(categoryName))
-        {
-            MessageBox.Show("Entrez un nom de categorie.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var inputWindow = new InputDialog("Nouveau tag", "Nom du tag:");
+        inputWindow.Owner = this;
 
-        // Check if already exists
-        var existing = Categories.FirstOrDefault(c => c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
-        if (existing != null)
+        if (inputWindow.ShowDialog() == true && !string.IsNullOrWhiteSpace(inputWindow.InputValue))
         {
-            SelectedCategory = existing;
-            return;
-        }
+            var tagName = inputWindow.InputValue.Trim();
 
-        // Create new category
-        var id = DatabaseService.Instance.AddCategory(categoryName);
-        var newCategory = new Category { Id = id, Name = categoryName, CreatedAt = DateTime.Now };
-        Categories.Add(newCategory);
-        SelectedCategory = newCategory;
+            // Check if already exists
+            var existing = _allTags.FirstOrDefault(t => t.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.IsSelected = true;
+                return;
+            }
+
+            // Create new tag in database
+            var id = DatabaseService.Instance.AddTag(tagName);
+            var newTag = new SelectableTag { Id = id, Name = tagName, IsSelected = true };
+            _allTags.Add(newTag);
+            ApplyTagFilter();
+        }
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -208,31 +214,10 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        // Determine category ID
-        int? categoryId = null;
-        Category? category = null;
-
-        if (SelectedCategory != null)
-        {
-            categoryId = SelectedCategory.Id;
-            category = SelectedCategory;
-        }
-        else if (!string.IsNullOrWhiteSpace(CategoryText))
-        {
-            // Create new category from text
-            var existing = Categories.FirstOrDefault(c => c.Name.Equals(CategoryText.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
-            {
-                categoryId = existing.Id;
-                category = existing;
-            }
-            else
-            {
-                var id = DatabaseService.Instance.GetOrCreateCategory(CategoryText.Trim());
-                categoryId = id;
-                category = new Category { Id = id, Name = CategoryText.Trim() };
-            }
-        }
+        // Get selected tags
+        var selectedTags = _allTags.Where(t => t.IsSelected)
+            .Select(t => new Tag { Id = t.Id, Name = t.Name })
+            .ToList();
 
         ResultApp = new AppEntry
         {
@@ -240,9 +225,7 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
             Name = Name.Trim(),
             ExePath = ExePath.Trim(),
             Arguments = string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim(),
-            CategoryId = categoryId,
-            Category = category,
-            Tags = ParseTags(TagsText)
+            Tags = selectedTags
         };
 
         DialogResult = true;
@@ -255,22 +238,30 @@ public partial class AppFormWindow : Window, INotifyPropertyChanged
         Close();
     }
 
-    private static List<Tag> ParseTags(string tagsText)
-    {
-        if (string.IsNullOrWhiteSpace(tagsText))
-            return new List<Tag>();
-
-        return tagsText
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => new Tag { Name = t.Trim() })
-            .ToList();
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+}
+
+public class SelectableTag : INotifyPropertyChanged
+{
+    private bool _isSelected;
+
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            _isSelected = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }

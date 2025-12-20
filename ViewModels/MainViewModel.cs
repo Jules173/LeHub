@@ -15,10 +15,10 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private string _searchText = string.Empty;
     private bool _showFavoritesOnly;
-    private Category? _selectedCategory;
+    private Tag? _selectedTag;
     private ObservableCollection<AppCardViewModel> _filteredApps = new();
     private readonly List<AppCardViewModel> _allApps = new();
-    private ObservableCollection<Category> _categories = new();
+    private ObservableCollection<Tag> _allTags = new();
     private ObservableCollection<PresetViewModel> _presets = new();
     private AppCardViewModel? _selectedApp;
 
@@ -41,7 +41,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         LoadApps();
         LoadPresets();
-        LoadCategories();
+        LoadTags();
     }
 
     public ObservableCollection<AppCardViewModel> FilteredApps
@@ -54,13 +54,27 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public ObservableCollection<Category> Categories
+    public ObservableCollection<Tag> AllTags
     {
-        get => _categories;
+        get => _allTags;
         private set
         {
-            _categories = value;
+            _allTags = value;
             OnPropertyChanged();
+        }
+    }
+
+    public Tag? SelectedTag
+    {
+        get => _selectedTag;
+        set
+        {
+            if (_selectedTag != value)
+            {
+                _selectedTag = value;
+                OnPropertyChanged();
+                ApplyFilter();
+            }
         }
     }
 
@@ -117,19 +131,6 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public Category? SelectedCategory
-    {
-        get => _selectedCategory;
-        set
-        {
-            if (_selectedCategory != value)
-            {
-                _selectedCategory = value;
-                OnPropertyChanged();
-                ApplyFilter();
-            }
-        }
-    }
 
     public ICommand AddAppCommand { get; }
     public ICommand ManageTagsCommand { get; }
@@ -150,6 +151,7 @@ public class MainViewModel : INotifyPropertyChanged
     public event Action<AppCardViewModel>? RequestEditApp;
     public event Action<string, string>? RequestAddAppWithData;
     public event Action? RequestAddPreset;
+    public event Action? RequestManageTags;
 
     public void LoadApps()
     {
@@ -171,13 +173,13 @@ public class MainViewModel : INotifyPropertyChanged
             presets.Select(p => new PresetViewModel(p)));
     }
 
-    public void LoadCategories()
+    public void LoadTags()
     {
-        var cats = DatabaseService.Instance.GetAllCategories();
-        // Insert a "null" category at the beginning for "All"
-        var categoriesWithAll = new List<Category> { new Category { Id = 0, Name = "Toutes" } };
-        categoriesWithAll.AddRange(cats);
-        Categories = new ObservableCollection<Category>(categoriesWithAll);
+        var tags = DatabaseService.Instance.GetAllTags();
+        // Insert a "null" tag at the beginning for "All"
+        var tagsWithAll = new List<Tag> { new Tag { Id = 0, Name = "Tous" } };
+        tagsWithAll.AddRange(tags);
+        AllTags = new ObservableCollection<Tag>(tagsWithAll);
     }
 
     private void ApplyFilter()
@@ -189,10 +191,10 @@ public class MainViewModel : INotifyPropertyChanged
             filtered = filtered.Where(a => a.IsFavorite);
         }
 
-        // Filter by category (Id = 0 means "All")
-        if (_selectedCategory != null && _selectedCategory.Id != 0)
+        // Filter by tag (Id = 0 means "All")
+        if (_selectedTag != null && _selectedTag.Id != 0)
         {
-            filtered = filtered.Where(a => a.CategoryId == _selectedCategory.Id);
+            filtered = filtered.Where(a => a.Tags.Any(t => t.Id == _selectedTag.Id));
         }
 
         if (!string.IsNullOrWhiteSpace(_searchText))
@@ -200,12 +202,29 @@ public class MainViewModel : INotifyPropertyChanged
             var search = _searchText.ToLowerInvariant();
             filtered = filtered.Where(a =>
                 a.Name.ToLowerInvariant().Contains(search) ||
-                a.CategoryName.ToLowerInvariant().Contains(search) ||
                 a.Tags.Any(t => t.Name.ToLowerInvariant().Contains(search)));
         }
 
         FilteredApps = new ObservableCollection<AppCardViewModel>(
             filtered.OrderBy(a => a.SortOrder).ThenBy(a => a.Name));
+    }
+
+    public void SelectApp(AppCardViewModel? app)
+    {
+        // Deselect previous
+        if (_selectedApp != null)
+        {
+            _selectedApp.IsSelected = false;
+        }
+
+        // Select new
+        _selectedApp = app;
+        if (_selectedApp != null)
+        {
+            _selectedApp.IsSelected = true;
+        }
+
+        OnPropertyChanged(nameof(SelectedApp));
     }
 
     private void ExecuteAddApp(object? _)
@@ -215,8 +234,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void ExecuteManageTags(object? _)
     {
-        MessageBox.Show("La gestion des tags sera disponible dans une future version.",
-            "Fonctionnalite a venir", MessageBoxButton.OK, MessageBoxImage.Information);
+        RequestManageTags?.Invoke();
     }
 
     public void ExecuteLaunchApp(object? parameter)
@@ -286,10 +304,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (result == MessageBoxResult.Yes)
         {
+            // Deselect if this was selected
+            if (_selectedApp == app)
+            {
+                SelectApp(null);
+            }
+
             DatabaseService.Instance.DeleteApp(app.Id);
             _allApps.Remove(app);
             ApplyFilter();
-            LoadCategories();
+            LoadTags();
         }
     }
 
@@ -508,7 +532,7 @@ public class MainViewModel : INotifyPropertyChanged
         newApp.SortOrder = _allApps.Count;
         _allApps.Add(new AppCardViewModel(newApp));
         ApplyFilter();
-        LoadCategories();
+        LoadTags();
     }
 
     public void UpdateExistingApp(AppCardViewModel cardVm, AppEntry updatedData)
@@ -537,7 +561,7 @@ public class MainViewModel : INotifyPropertyChanged
         cardVm.UpdateFromData(model);
 
         ApplyFilter();
-        LoadCategories();
+        LoadTags();
     }
 
     public void HandleFileDrop(string[] files)

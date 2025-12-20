@@ -135,7 +135,7 @@
                                FontSize="10"
                                TextAlignment="Center"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="v2.0"
+                    <TextBlock Text="v2.2"
                                Style="{StaticResource SubtitleText}"
                                HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -158,27 +158,12 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Category Filter -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0">
-                        <TextBlock Text="Categorie:"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"/>
-                        <ComboBox x:Name="CategoryCombo"
-                                  ItemsSource="{Binding Categories}"
-                                  SelectedItem="{Binding SelectedCategory}"
-                                  DisplayMemberPath="Name"
-                                  Width="120"
-                                  Background="{StaticResource BackgroundMediumBrush}"
-                                  Foreground="{StaticResource TextPrimaryBrush}"/>
-                    </StackPanel>
-
-                    <!-- Search Box -->
-                    <Grid Grid.Column="1" Width="300" HorizontalAlignment="Left">
+                    <!-- Search Box (LEFT) -->
+                    <Grid Grid.Column="0" Width="300">
                         <TextBox x:Name="SearchBox"
                                  Style="{StaticResource SearchTextBox}"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 MinWidth="300"/>
+                                 Width="300"/>
                         <TextBlock Text="Rechercher... (Ctrl+F)"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center"
@@ -201,8 +186,22 @@
                         </TextBlock>
                     </Grid>
 
-                    <!-- Favorites Toggle -->
+                    <!-- Filters (RIGHT) -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <!-- Tags Filter -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                            <TextBlock Text="Tags:"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"/>
+                            <ComboBox x:Name="TagsCombo"
+                                      ItemsSource="{Binding AllTags}"
+                                      SelectedItem="{Binding SelectedTag}"
+                                      DisplayMemberPath="Name"
+                                      Width="120"/>
+                        </StackPanel>
+
+                        <!-- Favorites Toggle -->
                         <ToggleButton Style="{StaticResource FavoriteToggle}"
                                       IsChecked="{Binding ShowFavoritesOnly}"
                                       ToolTip="Afficher uniquement les favoris">
@@ -231,40 +230,61 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Style="{StaticResource AppCard}"
+                            <Border x:Name="CardBorder"
                                     Width="240"
+                                    Background="{StaticResource CardBackgroundBrush}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12"
+                                    Margin="6"
+                                    Cursor="Hand"
                                     MouseLeftButtonDown="Card_MouseLeftButtonDown"
                                     MouseRightButtonUp="Card_MouseRightButtonUp"
                                     Tag="{Binding}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                                <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="*"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <!-- Missing Badge -->
-                                    <Border Grid.Row="0"
-                                            Background="{StaticResource AccentRedBrush}"
-                                            CornerRadius="3"
-                                            Padding="6,2"
-                                            HorizontalAlignment="Left"
-                                            Margin="0,0,0,6"
-                                            Visibility="{Binding IsExeMissing, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Introuvable"
-                                                   Foreground="White"
-                                                   FontSize="9"
-                                                   FontWeight="SemiBold"/>
-                                    </Border>
+                                    <!-- Favorite Star (top-right, absolute position) -->
+                                    <Button Grid.Row="0"
+                                            Content="{Binding IsFavorite, Converter={StaticResource BoolToStar}}"
+                                            FontSize="18"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Foreground="{StaticResource AccentYellowBrush}"
+                                            Cursor="Hand"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top"
+                                            Margin="0,-4,-4,0"
+                                            Padding="4"
+                                            Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Ajouter/Retirer des favoris"/>
 
-                                    <!-- Header: Icon + Name + Favorite -->
-                                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                                    <!-- Header: Icon + Name + Missing Badge -->
+                                    <Grid Grid.Row="0" Margin="0,0,30,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Icon -->
@@ -281,39 +301,30 @@
                                                    RenderOptions.BitmapScalingMode="HighQuality"/>
                                         </Border>
 
-                                        <!-- Name -->
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding Name}"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="14"
-                                                   FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"/>
-
-                                        <!-- Favorite Star -->
-                                        <Button Grid.Column="2"
-                                                Content="{Binding IsFavorite, Converter={StaticResource BoolToStar}}"
-                                                FontSize="18"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                Foreground="{StaticResource AccentYellowBrush}"
-                                                Cursor="Hand"
-                                                Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip="Ajouter/Retirer des favoris"/>
+                                        <!-- Name + Missing badge -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Background="{StaticResource AccentRedBrush}"
+                                                    CornerRadius="3"
+                                                    Padding="4,1"
+                                                    HorizontalAlignment="Left"
+                                                    Margin="0,2,0,0"
+                                                    Visibility="{Binding IsExeMissing, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="Introuvable"
+                                                           Foreground="White"
+                                                           FontSize="9"
+                                                           FontWeight="SemiBold"/>
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
 
-                                    <!-- Category -->
-                                    <TextBlock Grid.Row="2"
-                                               Text="{Binding CategoryName}"
-                                               Foreground="{StaticResource AccentBlueBrush}"
-                                               FontSize="10"
-                                               Margin="0,0,0,4"
-                                               Visibility="{Binding CategoryName, Converter={StaticResource StringNotEmptyToVisibility}}"/>
-
-                                    <!-- Tags -->
-                                    <ItemsControl Grid.Row="3"
-                                                  ItemsSource="{Binding Tags}"
+                                    <!-- Tags (limited to 2 + "+N") -->
+                                    <ItemsControl Grid.Row="1"
+                                                  ItemsSource="{Binding DisplayTags}"
                                                   Margin="0,0,0,8"
                                                   Visibility="{Binding TagsDisplay, Converter={StaticResource StringNotEmptyToVisibility}}">
                                         <ItemsControl.ItemsPanel>
@@ -324,7 +335,7 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border Style="{StaticResource TagChip}">
-                                                    <TextBlock Text="{Binding Name}"
+                                                    <TextBlock Text="{Binding}"
                                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                                FontSize="10"/>
                                                 </Border>
@@ -332,9 +343,13 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <!-- Action Buttons -->
-                                    <Grid Grid.Row="4">
+                                    <!-- Spacer -->
+                                    <Border Grid.Row="2"/>
+
+                                    <!-- Action Buttons: Lancer | Supprimer | ⋯ -->
+                                    <Grid Grid.Row="3">
                                         <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
@@ -349,7 +364,20 @@
                                                 Command="{Binding DataContext.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"/>
 
-                                        <Button Grid.Column="2"
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource DangerButton}"
+                                                Padding="8,5"
+                                                FontSize="11"
+                                                Margin="6,0,0,0"
+                                                ToolTip="Supprimer"
+                                                Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="🗑" FontSize="11"/>
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button Grid.Column="3"
                                                 Content="⋯"
                                                 Style="{StaticResource SmallButton}"
                                                 FontSize="16"

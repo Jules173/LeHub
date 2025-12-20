@@ -682,4 +682,46 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@tagId", tagId);
         cmd.ExecuteNonQuery();
     }
+
+    // Tag CRUD methods (public)
+    public int AddTag(string name)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO tags (name) VALUES (@name); SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("@name", name);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public void UpdateTag(int tagId, string newName)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE tags SET name = @name WHERE id = @id";
+        cmd.Parameters.AddWithValue("@name", newName);
+        cmd.Parameters.AddWithValue("@id", tagId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void DeleteTag(int tagId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        // First remove all app_tags links
+        var linkCmd = connection.CreateCommand();
+        linkCmd.CommandText = "DELETE FROM app_tags WHERE tag_id = @id";
+        linkCmd.Parameters.AddWithValue("@id", tagId);
+        linkCmd.ExecuteNonQuery();
+
+        // Then delete the tag
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM tags WHERE id = @id";
+        cmd.Parameters.AddWithValue("@id", tagId);
+        cmd.ExecuteNonQuery();
+    }
 }

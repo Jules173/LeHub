@@ -6,6 +6,7 @@ using LeHub.Views;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using DragEventArgs = System.Windows.DragEventArgs;
 using DataFormats = System.Windows.DataFormats;
+using MessageBox = System.Windows.MessageBox;
 
 namespace LeHub;
 
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
         _viewModel.RequestEditApp += OnRequestEditApp;
         _viewModel.RequestAddAppWithData += OnRequestAddAppWithData;
         _viewModel.RequestAddPreset += OnRequestAddPreset;
+        _viewModel.RequestManageTags += OnRequestManageTags;
     }
 
     private void OnRequestAddApp()
@@ -83,6 +85,18 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRequestManageTags()
+    {
+        var window = new TagsManagerWindow
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+        // Reload tags after closing
+        _viewModel.LoadTags();
+        _viewModel.LoadApps();
+    }
+
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         // Ctrl+F focuses search
@@ -102,11 +116,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Get selected app from focused element
-        var selectedApp = GetSelectedApp();
-        if (selectedApp == null) return;
+        // Escape = deselect
+        if (e.Key == Key.Escape)
+        {
+            _viewModel.SelectApp(null);
+            e.Handled = true;
+            return;
+        }
 
-        // Enter = launch
+        // The following shortcuts require a selected app
+        var selectedApp = _viewModel.SelectedApp;
+        if (selectedApp == null)
+        {
+            // No selection - inform user if they try to use keyboard shortcuts
+            if (e.Key == Key.Enter || e.Key == Key.Delete ||
+                (e.Key == Key.E && Keyboard.Modifiers == ModifierKeys.Control))
+            {
+                MessageBox.Show("Selectionne une application d'abord (clic sur une carte).",
+                    "Aucune selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                e.Handled = true;
+            }
+            return;
+        }
+
+        // Enter = launch selected app
         if (e.Key == Key.Enter)
         {
             _viewModel.LaunchApplication(selectedApp);
@@ -114,7 +147,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Delete = delete with confirmation
+        // Delete = delete selected app with confirmation
         if (e.Key == Key.Delete)
         {
             _viewModel.DeleteAppWithConfirmation(selectedApp);
@@ -122,7 +155,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Ctrl+E = edit
+        // Ctrl+E = edit selected app
         if (e.Key == Key.E && Keyboard.Modifiers == ModifierKeys.Control)
         {
             OnRequestEditApp(selectedApp);
@@ -130,30 +163,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private AppCardViewModel? GetSelectedApp()
-    {
-        // Try to get from focused element
-        if (Keyboard.FocusedElement is FrameworkElement fe)
-        {
-            var current = fe;
-            while (current != null)
-            {
-                if (current.DataContext is AppCardViewModel app)
-                    return app;
-                current = current.Parent as FrameworkElement;
-            }
-        }
-
-        // Fallback: return first app
-        return _viewModel.FilteredApps.FirstOrDefault();
-    }
-
     private void Card_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Double-click to launch
-        if (e.ClickCount == 2)
+        if (sender is Border border && border.Tag is AppCardViewModel app)
         {
-            if (sender is Border border && border.DataContext is AppCardViewModel app)
+            // Single click = select
+            _viewModel.SelectApp(app);
+
+            // Double-click = launch
+            if (e.ClickCount == 2)
             {
                 _viewModel.LaunchApplication(app);
                 e.Handled = true;
@@ -206,6 +224,8 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement element && element.Tag is AppCardViewModel app)
         {
+            // Select the app on right-click too
+            _viewModel.SelectApp(app);
             ShowAppContextMenu(element, app);
             e.Handled = true;
         }
@@ -243,8 +263,9 @@ public partial class MainWindow : Window
 
         var deleteItem = new MenuItem
         {
-            Header = "Supprimer",
-            Foreground = (System.Windows.Media.Brush)FindResource("AccentRedBrush")
+            Header = "🗑 Supprimer",
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentRedBrush"),
+            FontWeight = FontWeights.SemiBold
         };
         deleteItem.Click += (_, _) => _viewModel.ExecuteDeleteApp(app);
         menu.Items.Add(deleteItem);

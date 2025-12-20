@@ -10,11 +10,11 @@ none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
 C:\Users\jules\source\repos\LeHub\LeHub\App.xaml
-466441513
+6-17714013
 
-191331335565
+21-86801994
 211710811623
-MainWindow.xaml;Resources\Styles.xaml;Views\AppFormWindow.xaml;Views\PresetFormWindow.xaml;
+MainWindow.xaml;Resources\Styles.xaml;Views\AppFormWindow.xaml;Views\InputDialog.xaml;Views\PresetFormWindow.xaml;Views\TagsManagerWindow.xaml;
 
 False
 
