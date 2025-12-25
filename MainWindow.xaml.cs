@@ -17,19 +17,32 @@ namespace LeHub;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly ProjectsViewModel _projectsVM;
+
+    // Expose ViewModels for binding
+    public MainViewModel AppsVM => _viewModel;
+    public ProjectsViewModel ProjectsVM => _projectsVM;
 
     public MainWindow()
     {
         InitializeComponent();
 
         _viewModel = new MainViewModel();
-        DataContext = _viewModel;
+        _projectsVM = new ProjectsViewModel();
+        DataContext = this; // Use this as DataContext to expose both ViewModels
 
         _viewModel.RequestAddApp += OnRequestAddApp;
         _viewModel.RequestEditApp += OnRequestEditApp;
         _viewModel.RequestAddAppWithData += OnRequestAddAppWithData;
         _viewModel.RequestAddPreset += OnRequestAddPreset;
         _viewModel.RequestManageTags += OnRequestManageTags;
+        _viewModel.RequestRunPresetWithLogs += OnRequestRunPresetWithLogs;
+
+        _projectsVM.RequestAddProject += OnRequestAddProject;
+        _projectsVM.RequestEditProject += OnRequestEditProject;
+        _projectsVM.RequestDeleteProject += OnRequestDeleteProject;
+        _projectsVM.RequestRunTask += OnRequestRunTask;
+        _projectsVM.RequestPublishMode += OnRequestPublishMode;
 
         SourceInitialized += MainWindow_SourceInitialized;
     }
@@ -416,5 +429,408 @@ public partial class MainWindow : Window
 
         menu.PlacementTarget = placementTarget;
         menu.IsOpen = true;
+    }
+
+    // ========== Navigation Handlers ==========
+    private void NavApps_Checked(object sender, RoutedEventArgs e)
+    {
+        if (AppsPanel != null && ProjectsPanel != null && PresetsPanel != null)
+        {
+            AppsPanel.Visibility = Visibility.Visible;
+            ProjectsPanel.Visibility = Visibility.Collapsed;
+            PresetsPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void NavProjects_Checked(object sender, RoutedEventArgs e)
+    {
+        if (AppsPanel != null && ProjectsPanel != null && PresetsPanel != null)
+        {
+            AppsPanel.Visibility = Visibility.Collapsed;
+            ProjectsPanel.Visibility = Visibility.Visible;
+            PresetsPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // ========== Projects Event Handlers ==========
+    private void OnRequestAddProject()
+    {
+        var form = new Views.ProjectFormWindow { Owner = this };
+        if (form.ShowDialog() == true && form.ResultProject != null)
+        {
+            // Save to database (AddProject handles tag linking internally)
+            var projectId = Services.DatabaseService.Instance.AddProject(form.ResultProject);
+            form.ResultProject.Id = projectId;
+
+            _projectsVM.AddProjectToList(form.ResultProject);
+        }
+    }
+
+    private void OnRequestEditProject(ProjectCardViewModel project)
+    {
+        var form = new Views.ProjectFormWindow { Owner = this };
+        form.LoadFromProject(project.GetModel());
+
+        if (form.ShowDialog() == true && form.ResultProject != null)
+        {
+            Services.DatabaseService.Instance.UpdateProject(form.ResultProject);
+            project.UpdateFromData(form.ResultProject);
+        }
+    }
+
+    private void OnRequestDeleteProject(ProjectCardViewModel project)
+    {
+        var hasLinkedApp = Services.DatabaseService.Instance.ProjectHasLinkedApp(project.Id);
+        var dialog = new Views.DeleteProjectDialog(project.Name, hasLinkedApp) { Owner = this };
+
+        if (dialog.ShowDialog() == true && dialog.Choice != Views.DeleteProjectChoice.Cancel)
+        {
+            var deleteLinkedApp = dialog.Choice == Views.DeleteProjectChoice.DeleteBoth;
+            Services.DatabaseService.Instance.DeleteProject(project.Id, deleteLinkedApp);
+            _projectsVM.RemoveProject(project);
+
+            // Refresh apps if we deleted the linked app
+            if (deleteLinkedApp)
+            {
+                _viewModel.LoadApps();
+            }
+        }
+    }
+
+    private void OnRequestRunTask(ProjectCardViewModel project, Services.ProjectTask task, bool addToHub)
+    {
+        var logWindow = new Views.ProjectTaskLogWindow(project, task, addToHub) { Owner = this };
+        var result = logWindow.ShowDialog();
+
+        // If publish succeeded and addToHub is true, add/update the app in Hub
+        if (result == true && addToHub && task == Services.ProjectTask.Publish && !string.IsNullOrEmpty(logWindow.ArtifactPath))
+        {
+            AddOrUpdateAppFromProject(project, logWindow.ArtifactPath);
+        }
+    }
+
+    private void OnRequestPublishMode(ProjectCardViewModel project)
+    {
+        var dialog = new Views.PublishModeDialog(project.LastPublishMode) { Owner = this };
+        if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.SelectedMode))
+        {
+            // Save the selected mode
+            Services.DatabaseService.Instance.UpdateProjectPublishMode(project.Id, dialog.SelectedMode);
+            project.LastPublishMode = dialog.SelectedMode;
+
+            // Run publish with the selected mode (addToHub = true since this was triggered from PublishAndAddToHub)
+            var logWindow = new Views.ProjectTaskLogWindow(project, Services.ProjectTask.Publish, true, dialog.SelectedMode) { Owner = this };
+            var result = logWindow.ShowDialog();
+
+            if (result == true && !string.IsNullOrEmpty(logWindow.ArtifactPath))
+            {
+                AddOrUpdateAppFromProject(project, logWindow.ArtifactPath);
+            }
+        }
+    }
+
+    private void AddOrUpdateAppFromProject(ProjectCardViewModel project, string artifactPath)
+    {
+        // Upsert logic: Check if app already exists by source_project_id
+        var existingApp = Services.DatabaseService.Instance.GetAppBySourceProject(project.Id);
+
+        if (existingApp != null)
+        {
+            // Update existing app
+            existingApp.Name = project.Name;
+            existingApp.ExePath = artifactPath;
+            existingApp.UpdatedAt = DateTime.Now;
+            Services.DatabaseService.Instance.UpdateApp(existingApp);
+        }
+        else
+        {
+            // Create new app
+            var newApp = new Models.AppEntry
+            {
+                Name = project.Name,
+                ExePath = artifactPath,
+                SourceProjectId = project.Id,
+                GeneratedByLeHub = true,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            };
+            Services.DatabaseService.Instance.AddApp(newApp);
+        }
+
+        // Refresh apps list
+        _viewModel.LoadApps();
+
+        MessageBox.Show($"L'application '{project.Name}' a ete ajoutee/mise a jour dans le Hub.",
+            "Publie avec succes", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void AddProject_Click(object sender, RoutedEventArgs e)
+    {
+        OnRequestAddProject();
+    }
+
+    private void ProjectCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Border border && border.Tag is ProjectCardViewModel project)
+        {
+            _projectsVM.SelectProject(project);
+
+            if (e.ClickCount == 2)
+            {
+                // Double-click = open folder
+                _projectsVM.OpenFolderCommand.Execute(project);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void ProjectCard_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is ProjectCardViewModel project)
+        {
+            _projectsVM.SelectProject(project);
+            ShowProjectContextMenu(element, project);
+            e.Handled = true;
+        }
+    }
+
+    private void ProjectMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is ProjectCardViewModel project)
+        {
+            ShowProjectContextMenu(element, project);
+            e.Handled = true;
+        }
+    }
+
+    private void OpenProjectFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is ProjectCardViewModel project)
+        {
+            _projectsVM.OpenFolderCommand.Execute(project);
+        }
+    }
+
+    private void BuildProject_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is ProjectCardViewModel project)
+        {
+            _projectsVM.BuildCommand.Execute(project);
+        }
+    }
+
+    private void ShowProjectContextMenu(FrameworkElement placementTarget, ProjectCardViewModel project)
+    {
+        var menu = new ContextMenu();
+
+        // Open folder
+        var openFolderItem = new MenuItem { Header = "Ouvrir le dossier" };
+        openFolderItem.Click += (_, _) => _projectsVM.OpenFolderCommand.Execute(project);
+        menu.Items.Add(openFolderItem);
+
+        // Open in VS Code
+        if (Services.ToolDetectionService.Instance.IsVSCodeAvailable())
+        {
+            var vscodeItem = new MenuItem { Header = "Ouvrir dans VS Code" };
+            vscodeItem.Click += (_, _) => _projectsVM.OpenVSCodeCommand.Execute(project);
+            menu.Items.Add(vscodeItem);
+        }
+
+        // Open in Visual Studio (for .NET projects)
+        if (project.ProjectType == Models.ProjectType.DotNet &&
+            Services.ToolDetectionService.Instance.FindVisualStudio() != null)
+        {
+            var vsItem = new MenuItem { Header = "Ouvrir dans Visual Studio" };
+            vsItem.Click += (_, _) => _projectsVM.OpenVisualStudioCommand.Execute(project);
+            menu.Items.Add(vsItem);
+        }
+
+        menu.Items.Add(new Separator());
+
+        // Build
+        var buildItem = new MenuItem { Header = "Build" };
+        buildItem.Click += (_, _) => _projectsVM.BuildCommand.Execute(project);
+        menu.Items.Add(buildItem);
+
+        // Run
+        var runItem = new MenuItem { Header = "Executer" };
+        runItem.Click += (_, _) => _projectsVM.RunCommand.Execute(project);
+        menu.Items.Add(runItem);
+
+        // Test
+        var testItem = new MenuItem { Header = "Tester" };
+        testItem.Click += (_, _) => _projectsVM.TestCommand.Execute(project);
+        menu.Items.Add(testItem);
+
+        menu.Items.Add(new Separator());
+
+        // Publish
+        var publishItem = new MenuItem { Header = "Publier" };
+        publishItem.Click += (_, _) => _projectsVM.PublishCommand.Execute(project);
+        menu.Items.Add(publishItem);
+
+        // Publish + Add to Hub
+        var publishHubItem = new MenuItem { Header = "Publier + Ajouter au Hub", FontWeight = FontWeights.SemiBold };
+        publishHubItem.Click += (_, _) => _projectsVM.PublishAndAddToHubCommand.Execute(project);
+        menu.Items.Add(publishHubItem);
+
+        menu.Items.Add(new Separator());
+
+        // Edit
+        var editItem = new MenuItem { Header = "Modifier" };
+        editItem.Click += (_, _) => _projectsVM.EditProjectCommand.Execute(project);
+        menu.Items.Add(editItem);
+
+        // Delete
+        var deleteItem = new MenuItem
+        {
+            Header = "Supprimer",
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentRedBrush"),
+            FontWeight = FontWeights.SemiBold
+        };
+        deleteItem.Click += (_, _) => _projectsVM.DeleteProjectCommand.Execute(project);
+        menu.Items.Add(deleteItem);
+
+        menu.PlacementTarget = placementTarget;
+        menu.IsOpen = true;
+    }
+
+    // ========== Preset Event Handlers ==========
+    private void NavPresets_Checked(object sender, RoutedEventArgs e)
+    {
+        if (AppsPanel != null && ProjectsPanel != null && PresetsPanel != null)
+        {
+            AppsPanel.Visibility = Visibility.Collapsed;
+            ProjectsPanel.Visibility = Visibility.Collapsed;
+            PresetsPanel.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void PresetItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is FrameworkElement element && element.Tag is PresetViewModel preset)
+            {
+                OpenPresetDetailWindow(preset);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[LeHub] PresetItem_Click error: {ex.Message}");
+            MessageBox.Show($"Erreur lors de l'ouverture du preset: {ex.Message}",
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void PresetCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is Border border && border.Tag is PresetViewModel preset)
+            {
+                _viewModel.SelectPreset(preset);
+
+                if (e.ClickCount == 2)
+                {
+                    OpenPresetDetailWindow(preset);
+                    e.Handled = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[LeHub] PresetCard_MouseLeftButtonDown error: {ex.Message}");
+        }
+    }
+
+    private void OpenPresetDetailWindow(PresetViewModel preset)
+    {
+        if (preset == null)
+        {
+            MessageBox.Show("Le preset est invalide.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var detailWindow = new Views.PresetDetailWindow(
+            preset,
+            onRun: p => _viewModel.ExecuteLaunchPreset(p),
+            onEdit: p => OpenPresetEditWindow(p),
+            onDuplicate: p => DuplicatePreset(p),
+            onDelete: p =>
+            {
+                Services.DatabaseService.Instance.DeletePreset(p.Id);
+                _viewModel.LoadPresets();
+            },
+            onRunWithLogs: p => OnRequestRunPresetWithLogs(p)
+        )
+        { Owner = this };
+
+        detailWindow.ShowDialog();
+    }
+
+    private void OpenPresetEditWindow(PresetViewModel preset)
+    {
+        if (preset == null) return;
+
+        var editWindow = new Views.PresetEditWindow { Owner = this };
+        editWindow.LoadPreset(preset, _viewModel.AllApps);
+
+        if (editWindow.ShowDialog() == true && editWindow.ResultPreset != null)
+        {
+            Services.DatabaseService.Instance.UpdatePreset(editWindow.ResultPreset);
+            _viewModel.LoadPresets();
+        }
+    }
+
+    private void EditPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is PresetViewModel preset)
+        {
+            OpenPresetEditWindow(preset);
+        }
+    }
+
+    private void DuplicatePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is PresetViewModel preset)
+        {
+            DuplicatePreset(preset);
+        }
+    }
+
+    private void DuplicatePreset(PresetViewModel preset)
+    {
+        if (preset == null) return;
+
+        var newName = $"{preset.Name} (copie)";
+        var newId = Services.DatabaseService.Instance.DuplicatePreset(preset.Id, newName);
+        if (newId > 0)
+        {
+            _viewModel.LoadPresets();
+            MessageBox.Show($"Le preset '{newName}' a ete cree.", "Preset duplique",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            MessageBox.Show("Erreur lors de la duplication du preset.", "Erreur",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OnRequestRunPresetWithLogs(PresetViewModel preset)
+    {
+        if (preset == null) return;
+
+        var logWindow = new Views.PresetRunLogWindow(preset, _viewModel.AllApps) { Owner = this };
+        logWindow.ShowDialog();
+    }
+
+    private void RunPresetWithLogs_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is PresetViewModel preset)
+        {
+            OnRequestRunPresetWithLogs(preset);
+        }
     }
 }

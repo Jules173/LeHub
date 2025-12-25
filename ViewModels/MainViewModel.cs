@@ -152,6 +152,7 @@ public class MainViewModel : INotifyPropertyChanged
     public event Action<string, string>? RequestAddAppWithData;
     public event Action? RequestAddPreset;
     public event Action? RequestManageTags;
+    public event Action<PresetViewModel>? RequestRunPresetWithLogs;
 
     public void LoadApps()
     {
@@ -392,19 +393,31 @@ public class MainViewModel : INotifyPropertyChanged
         RequestAddPreset?.Invoke();
     }
 
-    private async void ExecuteLaunchPreset(object? parameter)
+    public async void ExecuteLaunchPreset(object? parameter)
     {
         if (parameter is not PresetViewModel preset) return;
 
-        foreach (var presetApp in preset.Apps)
-        {
-            if (presetApp.App == null) continue;
+        System.Diagnostics.Debug.WriteLine($"[Preset] Launching '{preset.Name}' with {preset.Apps?.Count ?? 0} apps, delay={preset.DelayMs}ms");
 
+        var apps = preset.Apps;
+        if (apps == null || apps.Count == 0)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Preset] No apps to launch for preset '{preset.Name}'");
+            return;
+        }
+
+        foreach (var presetApp in apps.OrderBy(a => a.OrderIndex))
+        {
+            if (presetApp == null) continue;
+
+            // Try to get the app from in-memory list first (most up-to-date)
             var appVm = _allApps.FirstOrDefault(a => a.Id == presetApp.AppId);
+
             if (appVm != null && appVm.CanLaunch)
             {
                 try
                 {
+                    System.Diagnostics.Debug.WriteLine($"[Preset] Starting app: {appVm.Name}");
                     var startInfo = new ProcessStartInfo
                     {
                         FileName = appVm.ExePath,
@@ -418,12 +431,45 @@ public class MainViewModel : INotifyPropertyChanged
                         await Task.Delay(preset.DelayMs);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[Preset] Error starting {appVm.Name}: {ex.Message}");
                     // Continue with next app
                 }
             }
+            else if (presetApp.App != null && File.Exists(presetApp.App.ExePath))
+            {
+                // Fallback: use the app from preset data
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Preset] Starting app from preset data: {presetApp.App.Name}");
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = presetApp.App.ExePath,
+                        Arguments = presetApp.App.Arguments ?? "",
+                        UseShellExecute = true
+                    };
+                    Process.Start(startInfo);
+
+                    if (preset.DelayMs > 0)
+                    {
+                        await Task.Delay(preset.DelayMs);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Preset] Error starting {presetApp.App.Name}: {ex.Message}");
+                }
+            }
+            else
+            {
+                // App not found or missing
+                var appName = presetApp.App?.Name ?? $"App ID {presetApp.AppId}";
+                System.Diagnostics.Debug.WriteLine($"[Preset] Skipping missing/unavailable app: {appName}");
+            }
         }
+
+        System.Diagnostics.Debug.WriteLine($"[Preset] Finished launching '{preset.Name}'");
     }
 
     private void ExecuteDeletePreset(object? parameter)
@@ -620,7 +666,51 @@ public class MainViewModel : INotifyPropertyChanged
     {
         var id = DatabaseService.Instance.AddPreset(preset);
         preset.Id = id;
-        Presets.Add(new PresetViewModel(preset));
+
+        // Reload from database to get fully populated preset with apps
+        var fullPreset = DatabaseService.Instance.GetPresetById(id);
+        if (fullPreset != null)
+        {
+            Presets.Add(new PresetViewModel(fullPreset));
+        }
+        else
+        {
+            // Fallback: use the original preset
+            Presets.Add(new PresetViewModel(preset));
+        }
+    }
+
+    private PresetViewModel? _selectedPreset;
+
+    public PresetViewModel? SelectedPreset
+    {
+        get => _selectedPreset;
+        set
+        {
+            if (_selectedPreset != value)
+            {
+                _selectedPreset = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public void SelectPreset(PresetViewModel? preset)
+    {
+        // Deselect previous
+        if (_selectedPreset != null)
+        {
+            _selectedPreset.IsSelected = false;
+        }
+
+        // Select new
+        _selectedPreset = preset;
+        if (_selectedPreset != null)
+        {
+            _selectedPreset.IsSelected = true;
+        }
+
+        OnPropertyChanged(nameof(SelectedPreset));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -634,20 +724,56 @@ public class MainViewModel : INotifyPropertyChanged
 public class PresetViewModel : INotifyPropertyChanged
 {
     private readonly Preset _preset;
+    private bool _isSelected;
 
     public PresetViewModel(Preset preset)
     {
-        _preset = preset;
+        _preset = preset ?? throw new ArgumentNullException(nameof(preset));
     }
 
     public int Id => _preset.Id;
-    public string Name => _preset.Name;
+    public string Name => _preset.Name ?? string.Empty;
     public int DelayMs => _preset.DelayMs;
-    public List<PresetApp> Apps => _preset.Apps;
+    public List<PresetApp> Apps => _preset.Apps ?? new List<PresetApp>();
 
     public string AppsDisplay => Apps.Count > 0
-        ? string.Join(", ", Apps.Select(a => a.App?.Name ?? "?"))
+        ? string.Join(", ", Apps.Where(a => a?.App != null).Select(a => a.App!.Name ?? "?"))
         : "Aucune app";
 
+    public int AppCount => Apps.Count(a => a?.App != null);
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public Preset GetModel() => _preset;
+
+    public void Refresh(Preset updatedPreset)
+    {
+        if (updatedPreset == null) return;
+        _preset.Name = updatedPreset.Name;
+        _preset.DelayMs = updatedPreset.DelayMs;
+        _preset.Apps = updatedPreset.Apps ?? new List<PresetApp>();
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(DelayMs));
+        OnPropertyChanged(nameof(Apps));
+        OnPropertyChanged(nameof(AppsDisplay));
+        OnPropertyChanged(nameof(AppCount));
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 }

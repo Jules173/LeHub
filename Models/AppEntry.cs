@@ -14,6 +14,10 @@ public class AppEntry
     public DateTime UpdatedAt { get; set; }
     public List<Tag> Tags { get; set; } = new();
 
+    // Project integration (for apps generated from projects)
+    public int? SourceProjectId { get; set; }
+    public bool GeneratedByLeHub { get; set; }
+
     // Helper property for display
     public string CategoryName => Category?.Name ?? "";
 }

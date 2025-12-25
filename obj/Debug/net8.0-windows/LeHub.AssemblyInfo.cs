@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LeHub")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4ff3a447962c11b5f1aab7d89caf2b28c03dcd7c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9b2e03634db7eb445e4ee28188498e34c23b372f")]
 [assembly: System.Reflection.AssemblyProductAttribute("LeHub")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LeHub")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

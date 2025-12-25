@@ -135,10 +135,10 @@
                 <StackPanel DockPanel.Dock="Top">
                     <Button Content="+ Ajouter une appli"
                             Style="{StaticResource SidebarButton}"
-                            Command="{Binding AddAppCommand}"/>
+                            Command="{Binding AppsVM.AddAppCommand}"/>
                     <Button Content="Gerer les tags"
                             Style="{StaticResource SidebarButton}"
-                            Command="{Binding ManageTagsCommand}"/>
+                            Command="{Binding AppsVM.ManageTagsCommand}"/>
 
                     <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,12"/>
 
@@ -150,9 +150,9 @@
                                Margin="0,0,0,8"/>
                     <Button Content="+ Nouveau preset"
                             Style="{StaticResource SidebarButton}"
-                            Command="{Binding AddPresetCommand}"/>
+                            Command="{Binding AppsVM.AddPresetCommand}"/>
 
-                    <ItemsControl ItemsSource="{Binding Presets}" Margin="0,8,0,0">
+                    <ItemsControl ItemsSource="{Binding AppsVM.Presets}" Margin="0,8,0,0">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="Transparent"
@@ -174,15 +174,15 @@
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="{Binding Name}"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       FontSize="12"/>
-                                            <TextBlock Text="{Binding AppsDisplay}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                                       FontSize="10"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Name}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   Cursor="Hand"
+                                                   Tag="{Binding}"
+                                                   ToolTip="Cliquer pour voir les details"
+                                                   MouseLeftButtonUp="PresetItem_Click"/>
                                         <Button Grid.Column="1"
                                                 Content="▶"
                                                 FontSize="10"
@@ -192,7 +192,7 @@
                                                 Cursor="Hand"
                                                 Padding="6,2"
                                                 ToolTip="Lancer le preset"
-                                                Command="{Binding DataContext.LaunchPresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Command="{Binding DataContext.AppsVM.LaunchPresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"/>
                                         <Button Grid.Column="2"
                                                 Content="x"
@@ -203,13 +203,38 @@
                                                 Cursor="Hand"
                                                 Padding="6,2"
                                                 ToolTip="Supprimer"
-                                                Command="{Binding DataContext.DeletePresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Command="{Binding DataContext.AppsVM.DeletePresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,12"/>
+
+                    <!-- Navigation Section -->
+                    <TextBlock Text="NAVIGATION"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <RadioButton x:Name="NavApps"
+                                 Content="Applications"
+                                 GroupName="MainNav"
+                                 IsChecked="True"
+                                 Style="{StaticResource NavigationRadioButton}"
+                                 Checked="NavApps_Checked"/>
+                    <RadioButton x:Name="NavProjects"
+                                 Content="Projets"
+                                 GroupName="MainNav"
+                                 Style="{StaticResource NavigationRadioButton}"
+                                 Checked="NavProjects_Checked"/>
+                    <RadioButton x:Name="NavPresets"
+                                 Content="Presets"
+                                 GroupName="MainNav"
+                                 Style="{StaticResource NavigationRadioButton}"
+                                 Checked="NavPresets_Checked"/>
                 </StackPanel>
 
                 <!-- Version -->
@@ -219,7 +244,7 @@
                                FontSize="10"
                                TextAlignment="Center"
                                Margin="0,0,0,8"/>
-                    <TextBlock Text="v2.3"
+                    <TextBlock Text="v2.4"
                                Style="{StaticResource SubtitleText}"
                                HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -228,86 +253,88 @@
         </Border>
 
         <!-- Main Content -->
-        <DockPanel Grid.Column="1">
-            <!-- Top Bar -->
-            <Border DockPanel.Dock="Top"
-                    Background="{StaticResource BackgroundMediumBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                    BorderThickness="0,0,0,1"
-                    Padding="16,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+        <Grid Grid.Column="1">
+            <!-- ========== APPS PANEL ========== -->
+            <DockPanel x:Name="AppsPanel" Visibility="Visible">
+                <!-- Top Bar -->
+                <Border DockPanel.Dock="Top"
+                        Background="{StaticResource BackgroundMediumBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                    <!-- Search Box (LEFT) -->
-                    <Grid Grid.Column="0" Width="300">
-                        <TextBox x:Name="SearchBox"
-                                 Style="{StaticResource SearchTextBox}"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="300"/>
-                        <TextBlock Text="Rechercher... (Ctrl+F)"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   VerticalAlignment="Center"
-                                   Margin="12,0,0,0"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <MultiDataTrigger>
-                                            <MultiDataTrigger.Conditions>
-                                                <Condition Binding="{Binding Text, ElementName=SearchBox}" Value=""/>
-                                                <Condition Binding="{Binding IsFocused, ElementName=SearchBox}" Value="False"/>
-                                            </MultiDataTrigger.Conditions>
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </MultiDataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
-
-                    <!-- Filters (RIGHT) -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <!-- Tags Filter -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
-                            <TextBlock Text="Tags:"
+                        <!-- Search Box (LEFT) -->
+                        <Grid Grid.Column="0" Width="300">
+                            <TextBox x:Name="SearchBox"
+                                     Style="{StaticResource SearchTextBox}"
+                                     Text="{Binding AppsVM.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="300"/>
+                            <TextBlock Text="Rechercher... (Ctrl+F)"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,8,0"/>
-                            <ComboBox x:Name="TagsCombo"
-                                      ItemsSource="{Binding TagFilterOptions}"
-                                      SelectedItem="{Binding SelectedTagFilter}"
-                                      DisplayMemberPath="Label"
-                                      MinWidth="140"
-                                      MaxWidth="200"/>
-                        </StackPanel>
+                                       Margin="12,0,0,0"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Text, ElementName=SearchBox}" Value=""/>
+                                                    <Condition Binding="{Binding IsFocused, ElementName=SearchBox}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
 
-                        <!-- Favorites Toggle -->
-                        <ToggleButton Style="{StaticResource FavoriteToggle}"
-                                      IsChecked="{Binding ShowFavoritesOnly}"
-                                      ToolTip="Afficher uniquement les favoris">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding ShowFavoritesOnly, Converter={StaticResource BoolToStar}}"
-                                           FontSize="16"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text=" Favoris"
+                        <!-- Filters (RIGHT) -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <!-- Tags Filter -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                                <TextBlock Text="Tags:"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                           Margin="0,0,8,0"/>
+                                <ComboBox x:Name="TagsCombo"
+                                          ItemsSource="{Binding AppsVM.TagFilterOptions}"
+                                          SelectedItem="{Binding AppsVM.SelectedTagFilter}"
+                                          DisplayMemberPath="Label"
+                                          MinWidth="140"
+                                          MaxWidth="200"/>
                             </StackPanel>
-                        </ToggleButton>
-                    </StackPanel>
-                </Grid>
-            </Border>
 
-            <!-- Apps Grid -->
+                            <!-- Favorites Toggle -->
+                            <ToggleButton Style="{StaticResource FavoriteToggle}"
+                                          IsChecked="{Binding AppsVM.ShowFavoritesOnly}"
+                                          ToolTip="Afficher uniquement les favoris">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding AppsVM.ShowFavoritesOnly, Converter={StaticResource BoolToStar}}"
+                                               FontSize="16"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text=" Favoris"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </ToggleButton>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Apps Grid -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="8">
-                <ItemsControl x:Name="AppsItemsControl" ItemsSource="{Binding FilteredApps}">
+                <ItemsControl x:Name="AppsItemsControl" ItemsSource="{Binding AppsVM.FilteredApps}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>
@@ -371,7 +398,7 @@
                                             VerticalAlignment="Top"
                                             Margin="0,-4,-4,0"
                                             Padding="4"
-                                            Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Command="{Binding DataContext.AppsVM.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="Ajouter/Retirer des favoris"/>
 
@@ -485,7 +512,7 @@
                                                     Padding="12,5"
                                                     FontSize="11"
                                                     IsEnabled="{Binding CanLaunch}"
-                                                    Command="{Binding DataContext.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Command="{Binding DataContext.AppsVM.LaunchAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"/>
 
                                             <Button Content="Supprimer"
@@ -493,7 +520,7 @@
                                                     Padding="10,5"
                                                     FontSize="11"
                                                     Margin="8,0,0,0"
-                                                    Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Command="{Binding DataContext.AppsVM.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"/>
                                         </StackPanel>
                                     </DockPanel>
@@ -503,7 +530,401 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-        </DockPanel>
+            </DockPanel>
+
+            <!-- ========== PROJECTS PANEL ========== -->
+            <DockPanel x:Name="ProjectsPanel" Visibility="Collapsed">
+                <!-- Top Bar -->
+                <Border DockPanel.Dock="Top"
+                        Background="{StaticResource BackgroundMediumBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Search Box (LEFT) -->
+                        <Grid Grid.Column="0" Width="300">
+                            <TextBox x:Name="ProjectSearchBox"
+                                     Style="{StaticResource SearchTextBox}"
+                                     Text="{Binding ProjectsVM.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="300"/>
+                            <TextBlock Text="Rechercher projets..."
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,0,0"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Text, ElementName=ProjectSearchBox}" Value=""/>
+                                                    <Condition Binding="{Binding IsFocused, ElementName=ProjectSearchBox}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+
+                        <!-- Add Project Button + Tags Filter (RIGHT) -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <!-- Tags Filter -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                                <TextBlock Text="Tags:"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <ComboBox ItemsSource="{Binding ProjectsVM.TagFilterOptions}"
+                                          SelectedItem="{Binding ProjectsVM.SelectedTagFilter}"
+                                          DisplayMemberPath="Label"
+                                          MinWidth="140"
+                                          MaxWidth="200"/>
+                            </StackPanel>
+
+                            <Button Content="+ Nouveau projet"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Padding="12,6"
+                                    Click="AddProject_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Projects Grid -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="8">
+                    <ItemsControl x:Name="ProjectsItemsControl" ItemsSource="{Binding ProjectsVM.FilteredProjects}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="ProjectCardBorder"
+                                        Background="{StaticResource CardBackgroundBrush}"
+                                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Cursor="Hand"
+                                        MouseLeftButtonDown="ProjectCard_MouseLeftButtonDown"
+                                        MouseRightButtonUp="ProjectCard_MouseRightButtonUp"
+                                        Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Width" Value="260"/>
+                                            <Setter Property="Padding" Value="12"/>
+                                            <Setter Property="Margin" Value="6"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                    <Setter Property="Width" Value="320"/>
+                                                    <Setter Property="Padding" Value="16"/>
+                                                    <Setter Property="Margin" Value="8"/>
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                    <Setter Property="Background" Value="#404858"/>
+                                                    <Setter Property="Effect" Value="{StaticResource CardSelectedShadow}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Project Name + Type Badge -->
+                                        <StackPanel Grid.Row="0" Margin="0,0,0,4">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                <Border Background="{StaticResource AccentBlueBrush}"
+                                                        CornerRadius="3"
+                                                        Padding="6,2"
+                                                        Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding TypeDisplay}"
+                                                               Foreground="White"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold"/>
+                                                </Border>
+                                                <Border Background="{StaticResource BackgroundMediumBrush}"
+                                                        CornerRadius="3"
+                                                        Padding="6,2"
+                                                        Visibility="{Binding FrameworkDisplay, Converter={StaticResource StringNotEmptyToVisibility}}">
+                                                    <TextBlock Text="{Binding FrameworkDisplay}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               FontSize="10"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Missing Folder Badge -->
+                                        <Border Grid.Row="1"
+                                                Background="{StaticResource AccentRedBrush}"
+                                                CornerRadius="3"
+                                                Padding="4,1"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,0,0,4"
+                                                Visibility="{Binding IsFolderMissing, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="Dossier introuvable"
+                                                       Foreground="White"
+                                                       FontSize="9"
+                                                       FontWeight="SemiBold"/>
+                                        </Border>
+
+                                        <!-- Tags -->
+                                        <ItemsControl Grid.Row="2"
+                                                      ItemsSource="{Binding DisplayTags}"
+                                                      Margin="0,0,0,8"
+                                                      Visibility="{Binding TagsDisplay, Converter={StaticResource StringNotEmptyToVisibility}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource TagChip}">
+                                                        <TextBlock Text="{Binding}"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   FontSize="10"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Spacer -->
+                                        <Border Grid.Row="3"/>
+
+                                        <!-- Action Buttons -->
+                                        <DockPanel Grid.Row="4">
+                                            <!-- More options button -->
+                                            <Button DockPanel.Dock="Right"
+                                                    Style="{StaticResource SmallButton}"
+                                                    Width="32"
+                                                    Padding="6,4"
+                                                    ToolTip="Plus d'options"
+                                                    Click="ProjectMenuButton_Click"
+                                                    Tag="{Binding}">
+                                                <Path Data="M2,5 A1.5,1.5 0 1,1 2,5.01 M7,5 A1.5,1.5 0 1,1 7,5.01 M12,5 A1.5,1.5 0 1,1 12,5.01"
+                                                      Fill="{StaticResource TextSecondaryBrush}"
+                                                      Width="14" Height="10"
+                                                      Stretch="Uniform"/>
+                                            </Button>
+
+                                            <!-- Quick action buttons -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="Ouvrir"
+                                                        Style="{StaticResource PrimaryButton}"
+                                                        Padding="10,5"
+                                                        FontSize="11"
+                                                        Click="OpenProjectFolder_Click"
+                                                        Tag="{Binding}"/>
+                                                <Button Content="Build"
+                                                        Style="{StaticResource ButtonBase}"
+                                                        Padding="10,5"
+                                                        FontSize="11"
+                                                        Margin="6,0,0,0"
+                                                        Click="BuildProject_Click"
+                                                        Tag="{Binding}"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+
+            <!-- ========== PRESETS PANEL ========== -->
+            <DockPanel x:Name="PresetsPanel" Visibility="Collapsed">
+                <!-- Top Bar -->
+                <Border DockPanel.Dock="Top"
+                        Background="{StaticResource BackgroundMediumBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Title -->
+                        <TextBlock Grid.Column="0"
+                                   Text="Presets"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- Add Button (RIGHT) -->
+                        <Button Grid.Column="2"
+                                Content="+ Nouveau preset"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="12,6"
+                                Command="{Binding AppsVM.AddPresetCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Presets Grid -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="8">
+                    <ItemsControl x:Name="PresetsItemsControl" ItemsSource="{Binding AppsVM.Presets}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="PresetCardBorder"
+                                        Background="{StaticResource CardBackgroundBrush}"
+                                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Cursor="Hand"
+                                        MouseLeftButtonDown="PresetCard_MouseLeftButtonDown"
+                                        Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Width" Value="280"/>
+                                            <Setter Property="Padding" Value="16"/>
+                                            <Setter Property="Margin" Value="6"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                    <Setter Property="Width" Value="340"/>
+                                                    <Setter Property="Padding" Value="20"/>
+                                                    <Setter Property="Margin" Value="8"/>
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                    <Setter Property="Background" Value="#404858"/>
+                                                    <Setter Property="Effect" Value="{StaticResource CardSelectedShadow}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Preset Name -->
+                                        <TextBlock Grid.Row="0"
+                                                   Text="{Binding Name}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,0,0,8"/>
+
+                                        <!-- Info badges -->
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+                                            <Border Background="{StaticResource AccentBlueBrush}"
+                                                    CornerRadius="3"
+                                                    Padding="8,3"
+                                                    Margin="0,0,8,0">
+                                                <TextBlock Foreground="White" FontSize="11" FontWeight="SemiBold">
+                                                    <Run Text="{Binding AppCount, Mode=OneWay}"/>
+                                                    <Run Text="apps"/>
+                                                </TextBlock>
+                                            </Border>
+                                            <Border Background="{StaticResource BackgroundMediumBrush}"
+                                                    CornerRadius="3"
+                                                    Padding="8,3">
+                                                <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">
+                                                    <Run Text="{Binding DelayMs, Mode=OneWay}"/>
+                                                    <Run Text="ms"/>
+                                                </TextBlock>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- Apps list preview -->
+                                        <TextBlock Grid.Row="2"
+                                                   Text="{Binding AppsDisplay}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="Wrap"
+                                                   MaxHeight="40"
+                                                   Margin="0,0,0,12"/>
+
+                                        <!-- Spacer -->
+                                        <Border Grid.Row="3"/>
+
+                                        <!-- Action Buttons -->
+                                        <StackPanel Grid.Row="4" Orientation="Horizontal">
+                                            <Button Content="Lancer"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    Padding="12,6"
+                                                    FontSize="11"
+                                                    Command="{Binding DataContext.AppsVM.LaunchPresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="Modifier"
+                                                    Style="{StaticResource ButtonBase}"
+                                                    Padding="10,6"
+                                                    FontSize="11"
+                                                    Margin="8,0,0,0"
+                                                    Click="EditPreset_Click"
+                                                    Tag="{Binding}"/>
+                                            <Button Content="Dupliquer"
+                                                    Style="{StaticResource ButtonBase}"
+                                                    Padding="10,6"
+                                                    FontSize="11"
+                                                    Margin="8,0,0,0"
+                                                    Click="DuplicatePreset_Click"
+                                                    Tag="{Binding}"/>
+                                            <Button Content="Supprimer"
+                                                    Style="{StaticResource DangerButton}"
+                                                    Padding="10,6"
+                                                    FontSize="11"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.AppsVM.DeletePresetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Grid>
         </Grid>
     </Grid>
 </Window>

@@ -100,7 +100,7 @@ namespace LeHub.Views {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/LeHub;V1.0.0.0;component/views/appformwindow.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/LeHub;component/views/appformwindow.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Views\AppFormWindow.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

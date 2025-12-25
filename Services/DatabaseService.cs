@@ -82,6 +82,25 @@ public class DatabaseService
                 FOREIGN KEY (preset_id) REFERENCES presets(id) ON DELETE CASCADE,
                 FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                root_path TEXT NOT NULL,
+                project_type TEXT NOT NULL,
+                framework TEXT,
+                last_publish_mode TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS project_tags (
+                project_id INTEGER NOT NULL,
+                tag_id INTEGER NOT NULL,
+                PRIMARY KEY (project_id, tag_id),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            );
         ";
         createTablesCmd.ExecuteNonQuery();
 
@@ -121,6 +140,22 @@ public class DatabaseService
         if (ColumnExists(connection, "apps", "category"))
         {
             MigrateCategoriesFromString(connection);
+        }
+
+        // Add source_project_id column for project integration
+        if (!ColumnExists(connection, "apps", "source_project_id"))
+        {
+            var cmd = connection.CreateCommand();
+            cmd.CommandText = "ALTER TABLE apps ADD COLUMN source_project_id INTEGER";
+            cmd.ExecuteNonQuery();
+        }
+
+        // Add generated_by_lehub column
+        if (!ColumnExists(connection, "apps", "generated_by_lehub"))
+        {
+            var cmd = connection.CreateCommand();
+            cmd.CommandText = "ALTER TABLE apps ADD COLUMN generated_by_lehub INTEGER NOT NULL DEFAULT 0";
+            cmd.ExecuteNonQuery();
         }
     }
 
@@ -235,7 +270,8 @@ public class DatabaseService
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"
             SELECT a.id, a.name, a.exe_path, a.args, a.is_favorite, a.category_id, a.sort_order,
-                   a.created_at, a.updated_at, c.id as cat_id, c.name as cat_name, c.color as cat_color
+                   a.created_at, a.updated_at, c.id as cat_id, c.name as cat_name, c.color as cat_color,
+                   a.source_project_id, a.generated_by_lehub
             FROM apps a
             LEFT JOIN categories c ON a.category_id = c.id
             ORDER BY a.sort_order, a.name";
@@ -253,7 +289,9 @@ public class DatabaseService
                 CategoryId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 SortOrder = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
                 CreatedAt = DateTime.Parse(reader.GetString(7)),
-                UpdatedAt = DateTime.Parse(reader.GetString(8))
+                UpdatedAt = DateTime.Parse(reader.GetString(8)),
+                SourceProjectId = reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                GeneratedByLeHub = !reader.IsDBNull(13) && reader.GetInt32(13) == 1
             };
 
             // Load category if exists
@@ -359,8 +397,8 @@ public class DatabaseService
 
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO apps (name, exe_path, args, is_favorite, category_id, sort_order)
-            VALUES (@name, @path, @args, @fav, @catId, @sort);
+            INSERT INTO apps (name, exe_path, args, is_favorite, category_id, sort_order, source_project_id, generated_by_lehub)
+            VALUES (@name, @path, @args, @fav, @catId, @sort, @srcProjId, @genByLeHub);
             SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("@name", app.Name);
         cmd.Parameters.AddWithValue("@path", app.ExePath);
@@ -368,6 +406,8 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@fav", app.IsFavorite ? 1 : 0);
         cmd.Parameters.AddWithValue("@catId", app.CategoryId.HasValue ? app.CategoryId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@sort", nextOrder);
+        cmd.Parameters.AddWithValue("@srcProjId", app.SourceProjectId.HasValue ? app.SourceProjectId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("@genByLeHub", app.GeneratedByLeHub ? 1 : 0);
 
         var appId = Convert.ToInt32(cmd.ExecuteScalar());
 
@@ -389,7 +429,8 @@ public class DatabaseService
         cmd.CommandText = @"
             UPDATE apps
             SET name = @name, exe_path = @path, args = @args, is_favorite = @fav,
-                category_id = @catId, sort_order = @sort, updated_at = CURRENT_TIMESTAMP
+                category_id = @catId, sort_order = @sort, source_project_id = @srcProjId,
+                generated_by_lehub = @genByLeHub, updated_at = CURRENT_TIMESTAMP
             WHERE id = @id";
         cmd.Parameters.AddWithValue("@name", app.Name);
         cmd.Parameters.AddWithValue("@path", app.ExePath);
@@ -397,6 +438,8 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@fav", app.IsFavorite ? 1 : 0);
         cmd.Parameters.AddWithValue("@catId", app.CategoryId.HasValue ? app.CategoryId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@sort", app.SortOrder);
+        cmd.Parameters.AddWithValue("@srcProjId", app.SourceProjectId.HasValue ? app.SourceProjectId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("@genByLeHub", app.GeneratedByLeHub ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", app.Id);
         var rowsAffected = cmd.ExecuteNonQuery();
 
@@ -618,6 +661,58 @@ public class DatabaseService
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Gets a single preset by ID with all its apps loaded.
+    /// </summary>
+    public Preset? GetPresetById(int presetId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT id, name, delay_ms, created_at FROM presets WHERE id = @id";
+        cmd.Parameters.AddWithValue("@id", presetId);
+
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            var preset = new Preset
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                DelayMs = reader.GetInt32(2),
+                CreatedAt = DateTime.Parse(reader.GetString(3))
+            };
+            reader.Close();
+            preset.Apps = GetPresetApps(connection, preset.Id);
+            return preset;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Duplicates a preset with a new name.
+    /// </summary>
+    public int DuplicatePreset(int presetId, string newName)
+    {
+        var original = GetPresetById(presetId);
+        if (original == null) return -1;
+
+        var duplicate = new Preset
+        {
+            Name = newName,
+            DelayMs = original.DelayMs,
+            Apps = original.Apps.Select(a => new PresetApp
+            {
+                AppId = a.AppId,
+                OrderIndex = a.OrderIndex
+            }).ToList()
+        };
+
+        return AddPreset(duplicate);
+    }
+
     // Category CRUD methods
     public int AddCategory(string name, string? color = null)
     {
@@ -728,5 +823,261 @@ public class DatabaseService
         cmd.CommandText = "DELETE FROM tags WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", tagId);
         cmd.ExecuteNonQuery();
+    }
+
+    // ===== PROJECT CRUD METHODS =====
+
+    public List<Project> GetAllProjects()
+    {
+        var projects = new List<Project>();
+
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, name, root_path, project_type, framework, last_publish_mode, created_at, updated_at
+            FROM projects
+            ORDER BY name";
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var project = new Project
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                RootPath = reader.GetString(2),
+                ProjectType = Enum.Parse<ProjectType>(reader.GetString(3)),
+                Framework = reader.IsDBNull(4) ? null : reader.GetString(4),
+                LastPublishMode = reader.IsDBNull(5) ? null : reader.GetString(5),
+                CreatedAt = DateTime.Parse(reader.GetString(6)),
+                UpdatedAt = DateTime.Parse(reader.GetString(7))
+            };
+            project.Tags = GetTagsForProject(connection, project.Id);
+            projects.Add(project);
+        }
+
+        return projects;
+    }
+
+    private List<Tag> GetTagsForProject(SqliteConnection connection, int projectId)
+    {
+        var tags = new List<Tag>();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT t.id, t.name
+            FROM tags t
+            INNER JOIN project_tags pt ON t.id = pt.tag_id
+            WHERE pt.project_id = @projectId";
+        cmd.Parameters.AddWithValue("@projectId", projectId);
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            tags.Add(new Tag
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1)
+            });
+        }
+
+        return tags;
+    }
+
+    public int AddProject(Project project)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO projects (name, root_path, project_type, framework, last_publish_mode)
+            VALUES (@name, @rootPath, @type, @framework, @lastMode);
+            SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("@name", project.Name);
+        cmd.Parameters.AddWithValue("@rootPath", project.RootPath);
+        cmd.Parameters.AddWithValue("@type", project.ProjectType.ToString());
+        cmd.Parameters.AddWithValue("@framework", project.Framework ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@lastMode", project.LastPublishMode ?? (object)DBNull.Value);
+
+        var projectId = Convert.ToInt32(cmd.ExecuteScalar());
+
+        foreach (var tag in project.Tags)
+        {
+            var tagId = GetOrCreateTag(connection, tag.Name);
+            LinkProjectTag(connection, projectId, tagId);
+        }
+
+        return projectId;
+    }
+
+    public void UpdateProject(Project project)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            UPDATE projects
+            SET name = @name, root_path = @rootPath, project_type = @type, framework = @framework,
+                last_publish_mode = @lastMode, updated_at = CURRENT_TIMESTAMP
+            WHERE id = @id";
+        cmd.Parameters.AddWithValue("@name", project.Name);
+        cmd.Parameters.AddWithValue("@rootPath", project.RootPath);
+        cmd.Parameters.AddWithValue("@type", project.ProjectType.ToString());
+        cmd.Parameters.AddWithValue("@framework", project.Framework ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@lastMode", project.LastPublishMode ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", project.Id);
+        cmd.ExecuteNonQuery();
+
+        // Clear and re-add tags
+        var clearCmd = connection.CreateCommand();
+        clearCmd.CommandText = "DELETE FROM project_tags WHERE project_id = @id";
+        clearCmd.Parameters.AddWithValue("@id", project.Id);
+        clearCmd.ExecuteNonQuery();
+
+        foreach (var tag in project.Tags)
+        {
+            var tagId = GetOrCreateTag(connection, tag.Name);
+            LinkProjectTag(connection, project.Id, tagId);
+        }
+    }
+
+    public void UpdateProjectPublishMode(int projectId, string mode)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE projects SET last_publish_mode = @mode, updated_at = CURRENT_TIMESTAMP WHERE id = @id";
+        cmd.Parameters.AddWithValue("@mode", mode);
+        cmd.Parameters.AddWithValue("@id", projectId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void DeleteProject(int projectId, bool deleteLinkedApp)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        if (deleteLinkedApp)
+        {
+            // Find and delete the linked app
+            var findAppCmd = connection.CreateCommand();
+            findAppCmd.CommandText = "SELECT id FROM apps WHERE source_project_id = @projectId";
+            findAppCmd.Parameters.AddWithValue("@projectId", projectId);
+            var appIdResult = findAppCmd.ExecuteScalar();
+
+            if (appIdResult != null)
+            {
+                var appId = Convert.ToInt32(appIdResult);
+
+                // Delete app_tags
+                var delTagsCmd = connection.CreateCommand();
+                delTagsCmd.CommandText = "DELETE FROM app_tags WHERE app_id = @id";
+                delTagsCmd.Parameters.AddWithValue("@id", appId);
+                delTagsCmd.ExecuteNonQuery();
+
+                // Delete preset_apps
+                var delPresetCmd = connection.CreateCommand();
+                delPresetCmd.CommandText = "DELETE FROM preset_apps WHERE app_id = @id";
+                delPresetCmd.Parameters.AddWithValue("@id", appId);
+                delPresetCmd.ExecuteNonQuery();
+
+                // Delete app
+                var delAppCmd = connection.CreateCommand();
+                delAppCmd.CommandText = "DELETE FROM apps WHERE id = @id";
+                delAppCmd.Parameters.AddWithValue("@id", appId);
+                delAppCmd.ExecuteNonQuery();
+            }
+        }
+        else
+        {
+            // Just unlink the app (set source_project_id to NULL)
+            var unlinkCmd = connection.CreateCommand();
+            unlinkCmd.CommandText = "UPDATE apps SET source_project_id = NULL WHERE source_project_id = @projectId";
+            unlinkCmd.Parameters.AddWithValue("@projectId", projectId);
+            unlinkCmd.ExecuteNonQuery();
+        }
+
+        // Delete project_tags
+        var linkCmd = connection.CreateCommand();
+        linkCmd.CommandText = "DELETE FROM project_tags WHERE project_id = @id";
+        linkCmd.Parameters.AddWithValue("@id", projectId);
+        linkCmd.ExecuteNonQuery();
+
+        // Delete project
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM projects WHERE id = @id";
+        cmd.Parameters.AddWithValue("@id", projectId);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void LinkProjectTag(SqliteConnection connection, int projectId, int tagId)
+    {
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "INSERT OR IGNORE INTO project_tags (project_id, tag_id) VALUES (@projectId, @tagId)";
+        cmd.Parameters.AddWithValue("@projectId", projectId);
+        cmd.Parameters.AddWithValue("@tagId", tagId);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Gets the app linked to a project (for upsert logic).
+    /// Returns null if no app is linked.
+    /// </summary>
+    public AppEntry? GetAppBySourceProject(int projectId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT a.id, a.name, a.exe_path, a.args, a.is_favorite, a.category_id, a.sort_order,
+                   a.created_at, a.updated_at, a.source_project_id, a.generated_by_lehub
+            FROM apps a
+            WHERE a.source_project_id = @projectId
+            LIMIT 1";
+        cmd.Parameters.AddWithValue("@projectId", projectId);
+
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            var app = new AppEntry
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                ExePath = reader.GetString(2),
+                Arguments = reader.IsDBNull(3) ? null : reader.GetString(3),
+                IsFavorite = reader.GetInt32(4) == 1,
+                CategoryId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                SortOrder = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                CreatedAt = DateTime.Parse(reader.GetString(7)),
+                UpdatedAt = DateTime.Parse(reader.GetString(8)),
+                SourceProjectId = reader.IsDBNull(9) ? null : reader.GetInt32(9),
+                GeneratedByLeHub = !reader.IsDBNull(10) && reader.GetInt32(10) == 1
+            };
+            app.Tags = GetTagsForApp(connection, app.Id);
+            return app;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if a project has a linked app.
+    /// </summary>
+    public bool ProjectHasLinkedApp(int projectId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM apps WHERE source_project_id = @projectId";
+        cmd.Parameters.AddWithValue("@projectId", projectId);
+
+        return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 }

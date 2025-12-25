@@ -1,0 +1,67 @@
+<Window x:Class="LeHub.Views.PublishModeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Mode de publication"
+        Width="400"
+        Height="250"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundDarkBrush}">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0"
+                   Text="Choisir le mode de publication"
+                   Style="{StaticResource TitleText}"
+                   Margin="0,0,0,16"/>
+
+        <!-- Description -->
+        <TextBlock Grid.Row="1"
+                   Text="Selectionnez le mode de build pour ce projet:"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   Margin="0,0,0,12"/>
+
+        <!-- Mode Selection -->
+        <StackPanel Grid.Row="2">
+            <RadioButton x:Name="DevMode"
+                         Content="Dev - Build de developpement (rapide, non optimise)"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Margin="0,0,0,8"
+                         GroupName="PublishMode"/>
+            <RadioButton x:Name="PreviewMode"
+                         Content="Preview - Build de pre-production"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Margin="0,0,0,8"
+                         GroupName="PublishMode"/>
+            <RadioButton x:Name="ProdMode"
+                         Content="Production - Build optimise pour la production"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Margin="0,0,0,8"
+                         GroupName="PublishMode"
+                         IsChecked="True"/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="Annuler"
+                    Style="{StaticResource ButtonBase}"
+                    Width="100"
+                    Margin="0,0,12,0"
+                    Click="CancelButton_Click"/>
+            <Button Content="Publier"
+                    Style="{StaticResource PrimaryButton}"
+                    Width="100"
+                    Click="PublishButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

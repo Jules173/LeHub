@@ -1,0 +1,155 @@
+<Window x:Class="LeHub.Views.PresetDetailWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Detail du preset"
+        Width="450"
+        Height="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundDarkBrush}">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header: Preset Name -->
+        <TextBlock Grid.Row="0"
+                   x:Name="PresetNameText"
+                   Text="Nom du preset"
+                   Style="{StaticResource TitleText}"
+                   Margin="0,0,0,16"/>
+
+        <!-- Info: Delay -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Delai entre les lancements:"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       VerticalAlignment="Center"/>
+            <TextBlock x:Name="DelayText"
+                       Text="200 ms"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       FontWeight="SemiBold"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Info: App Count -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,16">
+            <TextBlock Text="Applications:"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       VerticalAlignment="Center"/>
+            <TextBlock x:Name="AppCountText"
+                       Text="3 apps"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       FontWeight="SemiBold"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Apps List (ordered) -->
+        <Border Grid.Row="3"
+                Background="{StaticResource BackgroundMediumBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,0,0,16">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="AppsListControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12,10"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Order Number -->
+                                    <Border Grid.Column="0"
+                                            Background="{StaticResource AccentBlueBrush}"
+                                            CornerRadius="12"
+                                            Width="24" Height="24"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="{Binding OrderDisplay}"
+                                                   Foreground="White"
+                                                   FontSize="11"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+
+                                    <!-- App Name -->
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding AppName}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+
+                                    <!-- Missing indicator -->
+                                    <TextBlock Grid.Column="2"
+                                               Text="(manquant)"
+                                               Foreground="{StaticResource AccentRedBrush}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Run Buttons -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Button x:Name="RunButton"
+                        Content="Lancer"
+                        Style="{StaticResource PrimaryButton}"
+                        Padding="16,8"
+                        Click="RunButton_Click"/>
+                <Button Content="Lancer avec logs"
+                        Style="{StaticResource ButtonBase}"
+                        Padding="12,8"
+                        Margin="8,0,0,0"
+                        Click="RunWithLogsButton_Click"/>
+            </StackPanel>
+
+            <!-- Right: Edit, Duplicate, Delete, Close -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="Modifier"
+                        Style="{StaticResource ButtonBase}"
+                        Padding="12,8"
+                        Margin="0,0,8,0"
+                        Click="EditButton_Click"/>
+                <Button Content="Dupliquer"
+                        Style="{StaticResource ButtonBase}"
+                        Padding="12,8"
+                        Margin="0,0,8,0"
+                        Click="DuplicateButton_Click"/>
+                <Button Content="Supprimer"
+                        Style="{StaticResource DangerButton}"
+                        Padding="12,8"
+                        Margin="0,0,8,0"
+                        Click="DeleteButton_Click"/>
+                <Button Content="Fermer"
+                        Style="{StaticResource ButtonBase}"
+                        Padding="12,8"
+                        Click="CloseButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

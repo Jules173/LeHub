@@ -56,3 +56,17 @@ C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\InputDial
 C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\TagsManagerWindow.baml
 C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\InputDialog.g.cs
 C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\TagsManagerWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\DeleteProjectDialog.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\ProjectFormWindow.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\ProjectTaskLogWindow.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PublishModeDialog.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\DeleteProjectDialog.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\ProjectFormWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\ProjectTaskLogWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PublishModeDialog.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetDetailWindow.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetEditWindow.baml
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetDetailWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetEditWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetRunLogWindow.g.cs
+C:\Users\jules\source\repos\LeHub\LeHub\obj\Debug\net8.0-windows\Views\PresetRunLogWindow.baml
